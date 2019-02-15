@@ -85,7 +85,8 @@ public class JobExecutionUtil {
         ConfigAdapter db = DbService.getInstance().getConfigAdapter();
 
         no.nb.nna.veidemann.api.config.v1.ListRequest.Builder seedRequest = no.nb.nna.veidemann.api.config.v1.ListRequest.newBuilder()
-                .setKind(Kind.seed);
+                .setKind(Kind.seed)
+                .setPageSize(Integer.MAX_VALUE);
         seedRequest.getQueryMaskBuilder().addPaths(Kind.seed.name() + ".jobRef");
         seedRequest.getQueryTemplateBuilder().getSeedBuilder().addJobRefBuilder().setKind(Kind.crawlJob).setId(job.getId());
 
