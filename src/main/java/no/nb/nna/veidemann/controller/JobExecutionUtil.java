@@ -2,10 +2,9 @@ package no.nb.nna.veidemann.controller;
 
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import no.nb.nna.veidemann.api.ControllerProto.RunCrawlReply;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
-import no.nb.nna.veidemann.api.config.v1.ConfigRef;
 import no.nb.nna.veidemann.api.config.v1.Kind;
+import no.nb.nna.veidemann.api.config.v1.ListRequest;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
 import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
@@ -18,10 +17,10 @@ import org.slf4j.LoggerFactory;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static no.nb.nna.veidemann.commons.util.ApiTools.buildLabel;
 
@@ -84,19 +83,21 @@ public class JobExecutionUtil {
     public static void submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus) {
         ConfigAdapter db = DbService.getInstance().getConfigAdapter();
 
-        no.nb.nna.veidemann.api.config.v1.ListRequest.Builder seedRequest = no.nb.nna.veidemann.api.config.v1.ListRequest.newBuilder()
-                .setKind(Kind.seed)
-                .setPageSize(Integer.MAX_VALUE);
+        ListRequest.Builder seedRequest = ListRequest.newBuilder().setKind(Kind.seed);
         seedRequest.getQueryMaskBuilder().addPaths(Kind.seed.name() + ".jobRef");
         seedRequest.getQueryTemplateBuilder().getSeedBuilder().addJobRefBuilder().setKind(Kind.crawlJob).setId(job.getId());
 
         exe.submit(() -> {
+            AtomicLong count = new AtomicLong(0L);
             try (ChangeFeed<ConfigObject> seeds = db.listConfigObjects(seedRequest.build())) {
-                seeds.stream().forEach(s -> crawlSeed(job, s, jobExecutionStatus));
-            } catch (DbException e) {
+                seeds.stream().forEach(s -> {
+                    crawlSeed(job, s, jobExecutionStatus);
+                    count.incrementAndGet();
+                });
+            } catch (Exception e) {
                 LOG.error("Error while submitting seeds: " + e.getMessage(), e);
             }
-            LOG.info("All seeds for job '{}' started", job.getMeta().getName());
+            LOG.info("All {} seeds for job '{}' started", count.get(), job.getMeta().getName());
         });
     }
 

@@ -27,6 +27,7 @@ import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc;
 import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc.FrontierBlockingStub;
 import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc.FrontierStub;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
+import no.nb.nna.veidemann.commons.client.GrpcUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,7 +67,7 @@ public class FrontierClient implements AutoCloseable {
                     .setSeed(seed)
                     .setJobExecutionId(jobExecution.getId())
                     .build();
-            return blockingStub.crawlSeed(request);
+            return GrpcUtil.forkedCall(() -> blockingStub.crawlSeed(request));
         } catch (StatusRuntimeException ex) {
             LOG.error("RPC failed: " + ex.getStatus(), ex);
             throw ex;
