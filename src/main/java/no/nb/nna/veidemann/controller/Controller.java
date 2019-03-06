@@ -78,6 +78,9 @@ public class Controller {
         } catch (ConfigException | DbException ex) {
             LOG.error("Configuration error: {}", ex.getLocalizedMessage());
             System.exit(1);
+        } catch (InterruptedException ex) {
+            LOG.error("Interrupted", ex);
+            System.exit(2);
         }
 
         return this;
@@ -93,12 +96,25 @@ public class Controller {
         return SETTINGS;
     }
 
-    private AuAuServerInterceptor getAuAuServerInterceptor() {
+    private AuAuServerInterceptor getAuAuServerInterceptor() throws InterruptedException {
         String issuerUrl = SETTINGS.getOpenIdConnectIssuer();
         if (issuerUrl == null || issuerUrl.isEmpty()) {
             return new NoopAuAuServerInterceptor();
         } else {
-            return new IdTokenAuAuServerInterceptor(new UserRoleMapper(), new IdTokenValidator(issuerUrl));
+            IdTokenValidator idTokenValidator = null;
+
+            // Retry for 200 seconds if IDP doesn't respond
+            int retryAttempts = 0;
+            while (idTokenValidator == null && retryAttempts < 20) {
+                try {
+                    idTokenValidator = new IdTokenValidator(issuerUrl);
+                } catch (Exception e) {
+                    retryAttempts++;
+                    Thread.sleep(10000);
+                }
+            }
+
+            return new IdTokenAuAuServerInterceptor(new UserRoleMapper(), idTokenValidator);
         }
     }
 }
