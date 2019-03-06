@@ -546,6 +546,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
             LOG.info("Job '{}' starting", job.getMeta().getName());
 
             JobExecutionStatus jobExecutionStatus;
+            boolean addToRunningJob = false;
 
             JobExecutionsListReply runningJobsRequest = DbService.getInstance().getExecutionsAdapter()
                     .listJobExecutionStatus(ListJobExecutionsRequest.newBuilder()
@@ -562,6 +563,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
                 LOG.info("Creating new job execution '{}'", jobExecutionStatus.getId());
             } else {
                 jobExecutionStatus = runningJobs.get(0);
+                addToRunningJob = true;
                 LOG.info("Adding seeds to running job execution'{}'", jobExecutionStatus.getId());
             }
 
@@ -575,9 +577,9 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
                         .setKind(Kind.seed)
                         .setId(request.getSeedId())
                         .build());
-                crawlSeed(job, seed, jobExecutionStatus);
+                crawlSeed(job, seed, jobExecutionStatus, addToRunningJob);
             } else {
-                submitSeeds(job, jobExecutionStatus);
+                submitSeeds(job, jobExecutionStatus, addToRunningJob);
             }
         } catch (Exception ex) {
             LOG.error(ex.getMessage(), ex);
