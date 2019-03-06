@@ -103,14 +103,14 @@ public class Controller {
         } else {
             IdTokenValidator idTokenValidator = null;
 
-            // Retry for 200 seconds if IDP doesn't respond
+            // Retry for 400 seconds if IDP doesn't respond
             int retryAttempts = 0;
             while (idTokenValidator == null && retryAttempts < 20) {
                 try {
                     idTokenValidator = new IdTokenValidator(issuerUrl);
                 } catch (Exception e) {
                     retryAttempts++;
-                    Thread.sleep(10000);
+                    Thread.sleep(20000);
                 }
             }
 
