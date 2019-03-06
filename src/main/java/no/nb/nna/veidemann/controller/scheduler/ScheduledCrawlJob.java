@@ -56,7 +56,7 @@ public class ScheduledCrawlJob extends Task {
                     .createJobExecutionStatus(job.getId());
 
             try (ChangeFeed<ConfigObject> seeds = DbService.getInstance().getConfigAdapter().listConfigObjects(seedRequest.build())) {
-                seeds.stream().forEach(s -> crawlSeed(job, s, jobExecutionStatus));
+                seeds.stream().forEach(s -> crawlSeed(job, s, jobExecutionStatus, false));
 
                 LOG.info("All seeds for job '{}' started", job.getMeta().getName());
             }

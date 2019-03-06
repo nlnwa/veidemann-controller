@@ -2,6 +2,7 @@ package no.nb.nna.veidemann.controller;
 
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import no.nb.nna.veidemann.api.StatusProto.ListExecutionsRequest;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.ListRequest;
@@ -61,8 +62,24 @@ public class JobExecutionUtil {
         }
     }
 
-    public static void crawlSeed(ConfigObject job, ConfigObject seed, JobExecutionStatus jobExecutionStatus) {
+    public static boolean crawlSeed(ConfigObject job, ConfigObject seed, JobExecutionStatus jobExecutionStatus, boolean addToRunningJob) {
         if (!seed.getSeed().getDisabled()) {
+
+            if (addToRunningJob) {
+                ListExecutionsRequest.Builder req = ListExecutionsRequest.newBuilder()
+                        .setSeedId(seed.getId())
+                        .setJobExecutionId(jobExecutionStatus.getId());
+                try {
+                    if (DbService.getInstance().getExecutionsAdapter().listCrawlExecutionStatus(req.build()).getCount() > 0) {
+                        LOG.info("Seed '{}' is already crawling for jobExecution {}", seed.getMeta().getName(), jobExecutionStatus.getId());
+                        return false;
+                    }
+                } catch (DbException e) {
+                    LOG.warn("Error crawling seed '{}'", seed.getMeta().getName(), e);
+                    return false;
+                }
+            }
+
             LOG.info("Start harvest of: {}", seed.getMeta().getName());
 
             String type = ApiTools.getFirstLabelWithKey(seed.getMeta(), "type")
@@ -76,11 +93,15 @@ public class JobExecutionUtil {
                 });
             } else {
                 LOG.warn("No frontier defined for seed type {}", type);
+                return false;
             }
+            return true;
         }
+        LOG.debug("Seed '{}' is disabled", seed.getMeta().getName());
+        return false;
     }
 
-    public static void submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus) {
+    public static void submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus, boolean addToRunningJob) {
         ConfigAdapter db = DbService.getInstance().getConfigAdapter();
 
         ListRequest.Builder seedRequest = ListRequest.newBuilder().setKind(Kind.seed);
@@ -89,15 +110,19 @@ public class JobExecutionUtil {
 
         exe.submit(() -> {
             AtomicLong count = new AtomicLong(0L);
+            AtomicLong rejected = new AtomicLong(0L);
             try (ChangeFeed<ConfigObject> seeds = db.listConfigObjects(seedRequest.build())) {
                 seeds.stream().forEach(s -> {
-                    crawlSeed(job, s, jobExecutionStatus);
-                    count.incrementAndGet();
+                    if (crawlSeed(job, s, jobExecutionStatus, addToRunningJob)) {
+                        count.incrementAndGet();
+                    } else {
+                        rejected.incrementAndGet();
+                    }
                 });
             } catch (Exception e) {
                 LOG.error("Error while submitting seeds: " + e.getMessage(), e);
             }
-            LOG.info("All {} seeds for job '{}' started", count.get(), job.getMeta().getName());
+            LOG.info("{} seeds for job '{}' started, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
         });
     }
 
