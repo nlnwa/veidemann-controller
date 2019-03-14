@@ -71,7 +71,7 @@ public class JobExecutionUtil {
                         .setJobExecutionId(jobExecutionStatus.getId());
                 try {
                     if (DbService.getInstance().getExecutionsAdapter().listCrawlExecutionStatus(req.build()).getCount() > 0) {
-                        LOG.info("Seed '{}' is already crawling for jobExecution {}", seed.getMeta().getName(), jobExecutionStatus.getId());
+                        LOG.debug("Seed '{}' is already crawling for jobExecution {}", seed.getMeta().getName(), jobExecutionStatus.getId());
                         return false;
                     }
                 } catch (DbException e) {
@@ -80,7 +80,7 @@ public class JobExecutionUtil {
                 }
             }
 
-            LOG.info("Start harvest of: {}", seed.getMeta().getName());
+            LOG.debug("Start harvest of: {}", seed.getMeta().getName());
 
             String type = ApiTools.getFirstLabelWithKey(seed.getMeta(), "type")
                     .orElse(buildLabel("type", "url")).getValue().toLowerCase();
