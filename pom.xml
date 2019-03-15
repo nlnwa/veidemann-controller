@@ -56,6 +56,11 @@
     <dependencies>
         <dependency>
             <groupId>com.github.nlnwa</groupId>
+            <artifactId>veidemann-api</artifactId>
+            <version>eventhandler-SNAPSHOT</version>
+        </dependency>
+        <dependency>
+            <groupId>com.github.nlnwa</groupId>
             <artifactId>veidemann-rethinkdbadapter</artifactId>
             <version>${veidemann.rethinkdbadapter.version}</version>
         </dependency>
