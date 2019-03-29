@@ -30,6 +30,8 @@ public class Settings extends CommonSettings {
 
     private String openIdConnectIssuer;
 
+    private String apiKeyRoleMappingFile;
+
     public int getApiPort() {
         return apiPort;
     }
@@ -60,5 +62,13 @@ public class Settings extends CommonSettings {
 
     public void setOpenIdConnectIssuer(String openIdConnectIssuer) {
         this.openIdConnectIssuer = openIdConnectIssuer;
+    }
+
+    public String getApiKeyRoleMappingFile() {
+        return apiKeyRoleMappingFile;
+    }
+
+    public void setApiKeyRoleMappingFile(String apiKeyRoleMappingFile) {
+        this.apiKeyRoleMappingFile = apiKeyRoleMappingFile;
     }
 }

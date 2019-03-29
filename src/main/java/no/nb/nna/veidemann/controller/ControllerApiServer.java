@@ -19,7 +19,11 @@ import io.grpc.Server;
 import io.grpc.ServerBuilder;
 import io.opentracing.contrib.ServerTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
+import no.nb.nna.veidemann.commons.auth.ApiKeyAuAuServerInterceptor;
+import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapper;
+import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapperFromFile;
 import no.nb.nna.veidemann.commons.auth.AuAuServerInterceptor;
+import no.nb.nna.veidemann.commons.auth.AuthorisationAuAuServerInterceptor;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,17 +64,27 @@ public class ControllerApiServer implements AutoCloseable {
             LOG.warn("No CA certificate found. Protocol will use insecure plain text.");
         }
 
+        AuthorisationAuAuServerInterceptor authorisationInterceptor = new AuthorisationAuAuServerInterceptor();
+        ApiKeyRoleMapper apiKeyRoleMapper = new ApiKeyRoleMapperFromFile(Controller.getSettings().getApiKeyRoleMappingFile());
+        ApiKeyAuAuServerInterceptor apiKeyAuAuServerInterceptor = new ApiKeyAuAuServerInterceptor(apiKeyRoleMapper);
+
         server = serverBuilder
                 .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(new ConfigService())))
+                        auAuServerInterceptor.intercept(
+                                authorisationInterceptor.intercept(new ConfigService()))))
                 .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(new ControllerService(settings))))
+                        auAuServerInterceptor.intercept(
+                                authorisationInterceptor.intercept(new ControllerService(settings)))))
                 .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(new StatusService())))
+                        auAuServerInterceptor.intercept(
+                                authorisationInterceptor.intercept(new StatusService()))))
                 .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(new ReportService())))
+                        auAuServerInterceptor.intercept(
+                                authorisationInterceptor.intercept(new ReportService()))))
                 .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(new EventService())))
+                        auAuServerInterceptor.intercept(
+                                apiKeyAuAuServerInterceptor.intercept(
+                                        authorisationInterceptor.intercept(new EventService())))))
                 .build();
     }
 
