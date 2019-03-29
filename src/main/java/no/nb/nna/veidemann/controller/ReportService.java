@@ -132,7 +132,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
 
             respObserver.onCompleted();
         } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
+            LOG.debug(e.getMessage(), e);
             Status status = Status.UNKNOWN.withDescription(e.toString());
             respObserver.onError(status.asException());
         }
