@@ -56,11 +56,6 @@
     <dependencies>
         <dependency>
             <groupId>com.github.nlnwa</groupId>
-            <artifactId>veidemann-api</artifactId>
-            <version>1.0.0-beta7</version>
-        </dependency>
-        <dependency>
-            <groupId>com.github.nlnwa</groupId>
             <artifactId>veidemann-rethinkdbadapter</artifactId>
             <version>${veidemann.rethinkdbadapter.version}</version>
         </dependency>
