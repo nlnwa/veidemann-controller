@@ -15,7 +15,7 @@
  */
 package no.nb.nna.veidemann.controller;
 
-import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
 import com.nimbusds.jwt.JWTClaimsSet;
 import io.grpc.Attributes;
 import io.grpc.CallCredentials;
@@ -218,7 +218,7 @@ public class ControllerServiceTest {
             @Override
             public void applyRequestMetadata(MethodDescriptor<?, ?> method, Attributes attrs, Executor appExecutor, MetadataApplier applier) {
                 Metadata headers = new Metadata();
-                headers.put(IdTokenAuAuServerInterceptor.BEARER_TOKEN_KEY, "Bearer token1");
+                headers.put(AuAuServerInterceptor.AUTHORIZATION_KEY, "Bearer token1");
                 applier.apply(headers);
             }
 
@@ -250,16 +250,14 @@ public class ControllerServiceTest {
                             .claim("groups", new JSONArray())
                             .build());
             when(roleMapperMock.getRolesForUser(eq("user@example.com"), anyList(), anyCollection()))
-                    .thenReturn(ImmutableList.of(Role.READONLY));
+                    .thenReturn(Lists.newArrayList(Role.ANY_USER, Role.READONLY));
 
 
             assertThat(blockingStub.withCallCredentials(cred).listCrawlEntities(ListRequest.getDefaultInstance()))
                     .isSameAs(CrawlEntityListReply.getDefaultInstance());
 
-
             thrown.expect(StatusRuntimeException.class);
             thrown.expectMessage("PERMISSION_DENIED");
-
             blockingStub.withCallCredentials(cred).saveEntity(CrawlEntity.getDefaultInstance());
 
             thrown.expectMessage("UNAUTHENTICATED");

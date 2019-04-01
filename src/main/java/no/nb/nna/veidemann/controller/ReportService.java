@@ -60,7 +60,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void listCrawlLogs(CrawlLogListRequest request, StreamObserver<CrawlLogListReply> respObserver) {
         try {
             respObserver.onNext(db.listCrawlLogs(request));
@@ -73,7 +73,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void listPageLogs(PageLogListRequest request, StreamObserver<PageLogListReply> respObserver) {
         try {
             respObserver.onNext(db.listPageLogs(request));
@@ -86,7 +86,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void listScreenshots(ScreenshotListRequest request, StreamObserver<ScreenshotListReply> respObserver) {
         try {
             respObserver.onNext(db.listScreenshots(request));
@@ -99,7 +99,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
     public void executeDbQuery(ExecuteDbQueryRequest request, StreamObserver<ExecuteDbQueryReply> respObserver) {
         try {
             ReqlAst qry = QueryEngine.getInstance().parseQuery(request.getQuery());
@@ -132,7 +132,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
 
             respObserver.onCompleted();
         } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
+            LOG.debug(e.getMessage(), e);
             Status status = Status.UNKNOWN.withDescription(e.toString());
             respObserver.onError(status.asException());
         }

@@ -51,13 +51,13 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void getConfigObject(ConfigRef request, StreamObserver<ConfigObject> responseObserver) {
         handleGet(() -> db.getConfigObject(request), responseObserver);
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void listConfigObjects(ListRequest request, StreamObserver<ConfigObject> responseObserver) {
         new Thread(new Runnable() {
             @Override
@@ -76,13 +76,13 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void countConfigObjects(ListRequest request, StreamObserver<ListCountResponse> responseObserver) {
         handleGet(() -> db.countConfigObjects(request), responseObserver);
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void saveConfigObject(ConfigObject request, StreamObserver<ConfigObject> responseObserver) {
         try {
             // If kind is seed and scope is not set, apply default scope
@@ -103,7 +103,7 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void updateConfigObjects(UpdateRequest request, StreamObserver<UpdateResponse> responseObserver) {
         try {
             responseObserver.onNext(db.updateConfigObjects(request));
@@ -129,7 +129,7 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void getLabelKeys(GetLabelKeysRequest request, StreamObserver<LabelKeysResponse> responseObserver) {
         handleGet(() -> db.getLabelKeys(request), responseObserver);
     }

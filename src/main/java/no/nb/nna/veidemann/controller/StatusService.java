@@ -51,7 +51,7 @@ public class StatusService extends StatusGrpc.StatusImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.ADMIN, Role.CURATOR, Role.READONLY})
+    @AllowedRoles({Role.ADMIN, Role.CURATOR, Role.OPERATOR, Role.READONLY})
     public void getRunningExecutions(RunningExecutionsRequest request, StreamObserver<RunningExecutionsListReply> responseObserver) {
         new Thread(new Runnable() {
             @Override
@@ -71,13 +71,13 @@ public class StatusService extends StatusGrpc.StatusImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void getExecution(ExecutionId request, StreamObserver<CrawlExecutionStatus> responseObserver) {
         handleGet(() -> db.getCrawlExecutionStatus(request.getId()), responseObserver);
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void listExecutions(ListExecutionsRequest request, StreamObserver<ExecutionsListReply> responseObserver) {
         try {
             responseObserver.onNext(db.listCrawlExecutionStatus(request));
@@ -90,7 +90,7 @@ public class StatusService extends StatusGrpc.StatusImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
     public void abortExecution(ExecutionId request, StreamObserver<CrawlExecutionStatus> responseObserver) {
         try {
             CrawlExecutionStatus status = db.setCrawlExecutionStateAborted(request.getId());
@@ -105,13 +105,13 @@ public class StatusService extends StatusGrpc.StatusImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void getJobExecution(ExecutionId request, StreamObserver<JobExecutionStatus> responseObserver) {
         handleGet(() -> db.getJobExecutionStatus(request.getId()), responseObserver);
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void listJobExecutions(ListJobExecutionsRequest request, StreamObserver<JobExecutionsListReply> responseObserver) {
         try {
             responseObserver.onNext(db.listJobExecutionStatus(request));
@@ -124,7 +124,7 @@ public class StatusService extends StatusGrpc.StatusImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
     public void abortJobExecution(ExecutionId request, StreamObserver<JobExecutionStatus> responseObserver) {
         try {
             JobExecutionStatus status = db.setJobExecutionStateAborted(request.getId());
