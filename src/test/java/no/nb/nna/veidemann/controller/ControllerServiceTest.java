@@ -216,7 +216,7 @@ public class ControllerServiceTest {
     public void testAuthorization() throws DbException {
         CallCredentials cred = new CallCredentials() {
             @Override
-            public void applyRequestMetadata(MethodDescriptor<?, ?> method, Attributes attrs, Executor appExecutor, MetadataApplier applier) {
+            public void applyRequestMetadata(RequestInfo requestInfo, Executor appExecutor, MetadataApplier applier) {
                 Metadata headers = new Metadata();
                 headers.put(AuAuServerInterceptor.AUTHORIZATION_KEY, "Bearer token1");
                 applier.apply(headers);

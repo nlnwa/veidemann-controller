@@ -33,6 +33,8 @@ import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+
 /**
  *
  */
@@ -51,6 +53,14 @@ public class Controller {
     }
 
     public Controller() {
+        File certFile = new File("/veidemann/trustedca/tls.crt");
+        if (certFile.exists()) {
+            try {
+                CaImporter.importFromFile("/veidemann/trustedca/tls.crt");
+            } catch (Exception e) {
+                LOG.error("Failed loading certificates", e);
+            }
+        }
     }
 
     /**
