@@ -166,6 +166,9 @@
                         <ports>
                             <port>50051</port>
                         </ports>
+                        <jvmFlags>
+                            <jvmFlag>-Dfile.encoding=UTF-8</jvmFlag>
+                        </jvmFlags>
                     </container>
                 </configuration>
             </plugin>
