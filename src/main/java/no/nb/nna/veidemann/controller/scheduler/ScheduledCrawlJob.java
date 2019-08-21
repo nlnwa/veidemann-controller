@@ -27,6 +27,8 @@ import no.nb.nna.veidemann.commons.db.DbService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Iterator;
+
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
 
 /**
@@ -51,14 +53,17 @@ public class ScheduledCrawlJob extends Task {
         seedRequest.getQueryMaskBuilder().addPaths(Kind.seed.name() + ".jobRef");
         seedRequest.getQueryTemplateBuilder().getSeedBuilder().addJobRefBuilder().setKind(Kind.crawlJob).setId(job.getId());
 
-        try {
-            JobExecutionStatus jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
-                    .createJobExecutionStatus(job.getId());
+        try (ChangeFeed<ConfigObject> seeds = DbService.getInstance().getConfigAdapter().listConfigObjects(seedRequest.build())) {
+            Iterator<ConfigObject> iterator = seeds.stream().iterator();
+            if (iterator.hasNext()) {
+                JobExecutionStatus jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
+                        .createJobExecutionStatus(job.getId());
 
-            try (ChangeFeed<ConfigObject> seeds = DbService.getInstance().getConfigAdapter().listConfigObjects(seedRequest.build())) {
-                seeds.stream().forEach(s -> crawlSeed(job, s, jobExecutionStatus, false));
+                iterator.forEachRemaining(s -> crawlSeed(job, s, jobExecutionStatus, false));
 
                 LOG.info("All seeds for job '{}' started", job.getMeta().getName());
+            } else {
+                LOG.debug("No seeds for job '{}'", job.getMeta().getName());
             }
         } catch (DbException e) {
             throw new RuntimeException(e);
