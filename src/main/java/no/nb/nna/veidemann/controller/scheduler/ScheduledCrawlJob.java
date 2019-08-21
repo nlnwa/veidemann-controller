@@ -54,12 +54,12 @@ public class ScheduledCrawlJob extends Task {
         seedRequest.getQueryTemplateBuilder().getSeedBuilder().addJobRefBuilder().setKind(Kind.crawlJob).setId(job.getId());
 
         try (ChangeFeed<ConfigObject> seeds = DbService.getInstance().getConfigAdapter().listConfigObjects(seedRequest.build())) {
-            Iterator<ConfigObject> iterator = seeds.stream().iterator();
-            if (iterator.hasNext()) {
+            Iterator<ConfigObject> it = seeds.stream().iterator();
+            if (it.hasNext()) {
                 JobExecutionStatus jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
                         .createJobExecutionStatus(job.getId());
 
-                iterator.forEachRemaining(s -> crawlSeed(job, s, jobExecutionStatus, false));
+                it.forEachRemaining(seed -> crawlSeed(job, seed, jobExecutionStatus, false));
 
                 LOG.info("All seeds for job '{}' started", job.getMeta().getName());
             } else {
