@@ -77,7 +77,8 @@ public class ControllerApiServer implements AutoCloseable {
                                 authorisationInterceptor.intercept(new ControllerService(settings)))))
                 .addService(tracingInterceptor.intercept(
                         auAuServerInterceptor.intercept(
-                                authorisationInterceptor.intercept(new StatusService()))))
+                                apiKeyAuAuServerInterceptor.intercept(
+                                        authorisationInterceptor.intercept(new StatusService())))))
                 .addService(tracingInterceptor.intercept(
                         auAuServerInterceptor.intercept(
                                 apiKeyAuAuServerInterceptor.intercept(
