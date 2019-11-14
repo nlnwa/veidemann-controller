@@ -17,34 +17,34 @@ package no.nb.nna.veidemann.controller;
 
 import com.google.common.collect.Lists;
 import com.nimbusds.jwt.JWTClaimsSet;
-import io.grpc.Attributes;
 import io.grpc.CallCredentials;
 import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
-import io.grpc.MethodDescriptor;
+import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptor;
 import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
-import io.grpc.stub.StreamObserver;
 import net.minidev.json.JSONArray;
-import no.nb.nna.veidemann.api.ConfigProto;
-import no.nb.nna.veidemann.api.ConfigProto.CrawlEntity;
-import no.nb.nna.veidemann.api.ControllerGrpc;
-import no.nb.nna.veidemann.api.ControllerProto.CrawlEntityListReply;
-import no.nb.nna.veidemann.api.ControllerProto.ListRequest;
+import no.nb.nna.veidemann.api.config.v1.ConfigGrpc;
+import no.nb.nna.veidemann.api.config.v1.ConfigObject;
+import no.nb.nna.veidemann.api.config.v1.ConfigRef;
+import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.Role;
+import no.nb.nna.veidemann.commons.auth.ApiKeyAuAuServerInterceptor;
+import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapper;
+import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapperFromConfig;
+import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapperFromFile;
 import no.nb.nna.veidemann.commons.auth.AuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.EmailContextKey;
 import no.nb.nna.veidemann.commons.auth.IdTokenAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.IdTokenValidator;
-import no.nb.nna.veidemann.commons.auth.NoopAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.UserRoleMapper;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.DbServiceSPI;
 import no.nb.nna.veidemann.controller.settings.Settings;
-import no.nb.nna.veidemann.db.ProtoUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
@@ -52,20 +52,14 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 import org.mockito.stubbing.Answer;
 
-import java.time.OffsetDateTime;
-import java.util.concurrent.CountDownLatch;
+import java.util.List;
 import java.util.concurrent.Executor;
-import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 import static org.mockito.Mockito.anyCollection;
 import static org.mockito.Mockito.anyList;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -77,15 +71,13 @@ public class ControllerServiceTest {
 
     private InProcessServerBuilder inProcessServerBuilder;
 
-    private ControllerApiServer inProcessServer;
+    private ControllerApiServerMock inProcessServer;
 
     private ManagedChannel inProcessChannel;
 
-    private ControllerGrpc.ControllerBlockingStub blockingStub;
+    private ConfigGrpc.ConfigBlockingStub blockingStub;
 
-    private ControllerGrpc.ControllerStub asyncStub;
-
-    private Settings settings = new Settings();
+    private ConfigGrpc.ConfigStub asyncStub;
 
     @Rule
     public ExpectedException thrown = ExpectedException.none();
@@ -94,122 +86,14 @@ public class ControllerServiceTest {
     public void beforeEachTest() {
         inProcessServerBuilder = InProcessServerBuilder.forName(uniqueServerName).directExecutor();
         inProcessChannel = InProcessChannelBuilder.forName(uniqueServerName).directExecutor().build();
-        blockingStub = ControllerGrpc.newBlockingStub(inProcessChannel);
-        asyncStub = ControllerGrpc.newStub(inProcessChannel);
+        blockingStub = ConfigGrpc.newBlockingStub(inProcessChannel);
+        asyncStub = ConfigGrpc.newStub(inProcessChannel);
     }
 
     @After
     public void afterEachTest() {
         inProcessChannel.shutdownNow();
         inProcessServer.close();
-    }
-
-    @Test
-    public void testSaveEntity() throws InterruptedException, DbException {
-        DbServiceSPI dbProviderMock = mock(DbServiceSPI.class);
-        ConfigAdapter dbMock = mock(ConfigAdapter.class);
-        when(dbProviderMock.getConfigAdapter()).thenReturn(dbMock);
-        try (DbService db = DbService.configure(dbProviderMock)) {
-            AuAuServerInterceptor auau = new NoopAuAuServerInterceptor();
-            inProcessServer = new ControllerApiServer(settings, inProcessServerBuilder, auau).start();
-
-            CrawlEntity request = CrawlEntity.newBuilder()
-                    .setMeta(ConfigProto.Meta.newBuilder()
-                            .setName("Nasjonalbiblioteket")
-                            .addLabel(ConfigProto.Label.newBuilder()
-                                    .setKey("frequency")
-                                    .setValue("Daily"))
-                            .addLabel(ConfigProto.Label.newBuilder()
-                                    .setKey("orgType")
-                                    .setValue("Government"))
-                            .setCreated(ProtoUtils.odtToTs(OffsetDateTime.parse("2017-04-06T06:20:35.779Z"))))
-                    .build();
-
-            CrawlEntity reply = CrawlEntity.newBuilder()
-                    .setId("Random UID")
-                    .setMeta(ConfigProto.Meta.newBuilder()
-                            .setName("Nasjonalbiblioteket")
-                            .addLabel(ConfigProto.Label.newBuilder()
-                                    .setKey("frequency")
-                                    .setValue("Daily"))
-                            .addLabel(ConfigProto.Label.newBuilder()
-                                    .setKey("orgType")
-                                    .setValue("Government"))
-                            .setCreated(ProtoUtils.odtToTs(OffsetDateTime.parse("2017-04-06T06:20:35.779Z"))))
-                    .build();
-
-            when(dbMock.saveCrawlEntity(request)).thenReturn(reply);
-
-            CrawlEntity response;
-            response = blockingStub.saveEntity(request);
-            assertThat(response).isSameAs(reply);
-
-            final CountDownLatch latch = new CountDownLatch(1);
-            asyncStub.saveEntity(request, new StreamObserver<CrawlEntity>() {
-                @Override
-                public void onNext(CrawlEntity value) {
-                    assertThat(response).isSameAs(reply);
-                }
-
-                @Override
-                public void onError(Throwable t) {
-                    fail("An error was thrown", t);
-                }
-
-                @Override
-                public void onCompleted() {
-                    latch.countDown();
-                }
-
-            });
-            assertThat(latch.await(1, TimeUnit.SECONDS)).isTrue();
-
-            verify(dbMock, times(2)).saveCrawlEntity(request);
-            verifyNoMoreInteractions(dbMock);
-        }
-    }
-
-    @Test
-    public void testListCrawlEntities() throws InterruptedException, DbException {
-        DbServiceSPI dbProviderMock = mock(DbServiceSPI.class);
-        ConfigAdapter dbMock = mock(ConfigAdapter.class);
-        when(dbProviderMock.getConfigAdapter()).thenReturn(dbMock);
-        try (DbService db = DbService.configure(dbProviderMock)) {
-            AuAuServerInterceptor auau = new NoopAuAuServerInterceptor();
-            inProcessServer = new ControllerApiServer(settings, inProcessServerBuilder, auau).start();
-
-            ListRequest request = ListRequest.newBuilder().build();
-            CrawlEntityListReply reply = CrawlEntityListReply.newBuilder().build();
-
-            when(dbMock.listCrawlEntities(request)).thenReturn(reply);
-
-            CrawlEntityListReply response;
-            response = blockingStub.listCrawlEntities(request);
-            assertThat(response).isSameAs(reply);
-
-            final CountDownLatch latch = new CountDownLatch(1);
-            asyncStub.listCrawlEntities(null, new StreamObserver<CrawlEntityListReply>() {
-                @Override
-                public void onNext(CrawlEntityListReply value) {
-                    assertThat(response).isSameAs(reply);
-                }
-
-                @Override
-                public void onError(Throwable t) {
-                    fail("An error was thrown", t);
-                }
-
-                @Override
-                public void onCompleted() {
-                    latch.countDown();
-                }
-
-            });
-            assertThat(latch.await(1, TimeUnit.SECONDS)).isTrue();
-
-            verify(dbMock, times(2)).listCrawlEntities(request);
-            verifyNoMoreInteractions(dbMock);
-        }
     }
 
     @Test
@@ -234,15 +118,21 @@ public class ControllerServiceTest {
         try (DbService db = DbService.configure(dbProviderMock)) {
             IdTokenValidator idValidatorMock = mock(IdTokenValidator.class);
             UserRoleMapper roleMapperMock = mock(UserRoleMapper.class);
-            AuAuServerInterceptor auau = new IdTokenAuAuServerInterceptor(roleMapperMock, idValidatorMock);
-            inProcessServer = new ControllerApiServer(settings, inProcessServerBuilder, auau).start();
 
-            when(dbMock.listCrawlEntities(ListRequest.getDefaultInstance()))
-                    .thenReturn(CrawlEntityListReply.getDefaultInstance());
-            when(dbMock.saveCrawlEntity(CrawlEntity.getDefaultInstance()))
-                    .thenAnswer((Answer<CrawlEntity>) invocation -> {
+            ConfigObject coEntity = ConfigObject.newBuilder()
+                    .setKind(Kind.crawlEntity)
+                    .build();
+
+            ConfigRef entityRef = ConfigRef.newBuilder()
+                    .setKind(Kind.crawlEntity)
+                    .build();
+
+            when(dbMock.getConfigObject(entityRef))
+                    .thenReturn(coEntity);
+            when(dbMock.saveConfigObject(coEntity))
+                    .thenAnswer((Answer<ConfigObject>) invocation -> {
                         assertThat(EmailContextKey.email()).isEqualTo("user@example.com");
-                        return CrawlEntity.getDefaultInstance();
+                        return coEntity;
                     });
             when(idValidatorMock.verifyIdToken("token1"))
                     .thenReturn(new JWTClaimsSet.Builder()
@@ -252,16 +142,44 @@ public class ControllerServiceTest {
             when(roleMapperMock.getRolesForUser(eq("user@example.com"), anyList(), anyCollection()))
                     .thenReturn(Lists.newArrayList(Role.ANY_USER, Role.READONLY));
 
+            inProcessServer = new ControllerApiServerMock(idValidatorMock, inProcessServerBuilder, roleMapperMock).start();
 
-            assertThat(blockingStub.withCallCredentials(cred).listCrawlEntities(ListRequest.getDefaultInstance()))
-                    .isSameAs(CrawlEntityListReply.getDefaultInstance());
+            assertThat(blockingStub.withCallCredentials(cred).getConfigObject(entityRef))
+                    .isSameAs(coEntity);
 
             thrown.expect(StatusRuntimeException.class);
             thrown.expectMessage("PERMISSION_DENIED");
-            blockingStub.withCallCredentials(cred).saveEntity(CrawlEntity.getDefaultInstance());
+            blockingStub.withCallCredentials(cred).saveConfigObject(coEntity);
 
             thrown.expectMessage("UNAUTHENTICATED");
-            blockingStub.saveEntity(CrawlEntity.getDefaultInstance());
+            blockingStub.saveConfigObject(coEntity);
+        }
+    }
+
+    private class ControllerApiServerMock extends ControllerApiServer {
+        final IdTokenValidator idValidator;
+
+        @Override
+        public ControllerApiServerMock start() {
+            super.start();
+            return this;
+        }
+
+        public ControllerApiServerMock(IdTokenValidator idValidator, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper) {
+            super(new Settings(), serverBuilder, userRoleMapper);
+            this.idValidator = idValidator;
+        }
+
+        @Override
+        List<ServerInterceptor> getAuAuServerInterceptors(List<ServerInterceptor> interceptors) throws InterruptedException {
+            interceptors.add(new IdTokenAuAuServerInterceptor(userRoleMapper, idValidator));
+
+            ApiKeyRoleMapper apiKeyDbRoleMapper = new ApiKeyRoleMapperFromConfig(userRoleMapper);
+            interceptors.add(new ApiKeyAuAuServerInterceptor(apiKeyDbRoleMapper));
+
+            ApiKeyRoleMapper apiKeyFileRoleMapper = new ApiKeyRoleMapperFromFile(settings.getApiKeyRoleMappingFile());
+            interceptors.add(new ApiKeyAuAuServerInterceptor(apiKeyFileRoleMapper));
+            return interceptors;
         }
     }
 }

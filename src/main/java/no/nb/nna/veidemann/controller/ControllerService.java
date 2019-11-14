@@ -18,50 +18,25 @@ package no.nb.nna.veidemann.controller;
 import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import no.nb.nna.veidemann.api.ConfigProto;
-import no.nb.nna.veidemann.api.ConfigProto.BrowserConfig;
-import no.nb.nna.veidemann.api.ConfigProto.BrowserScript;
-import no.nb.nna.veidemann.api.ConfigProto.CrawlConfig;
-import no.nb.nna.veidemann.api.ConfigProto.CrawlEntity;
-import no.nb.nna.veidemann.api.ConfigProto.CrawlHostGroupConfig;
-import no.nb.nna.veidemann.api.ConfigProto.CrawlJob;
-import no.nb.nna.veidemann.api.ConfigProto.CrawlScheduleConfig;
-import no.nb.nna.veidemann.api.ConfigProto.LogLevels;
-import no.nb.nna.veidemann.api.ConfigProto.PolitenessConfig;
-import no.nb.nna.veidemann.api.ConfigProto.RoleMapping;
-import no.nb.nna.veidemann.api.ConfigProto.Seed;
-import no.nb.nna.veidemann.api.ControllerGrpc;
-import no.nb.nna.veidemann.api.ControllerProto.BrowserConfigListReply;
-import no.nb.nna.veidemann.api.ControllerProto.BrowserScriptListReply;
-import no.nb.nna.veidemann.api.ControllerProto.CrawlConfigListReply;
-import no.nb.nna.veidemann.api.ControllerProto.CrawlEntityListReply;
-import no.nb.nna.veidemann.api.ControllerProto.CrawlHostGroupConfigListReply;
-import no.nb.nna.veidemann.api.ControllerProto.CrawlJobListReply;
-import no.nb.nna.veidemann.api.ControllerProto.CrawlScheduleConfigListReply;
-import no.nb.nna.veidemann.api.ControllerProto.GetRequest;
-import no.nb.nna.veidemann.api.ControllerProto.ListRequest;
-import no.nb.nna.veidemann.api.ControllerProto.OpenIdConnectIssuerReply;
-import no.nb.nna.veidemann.api.ControllerProto.PolitenessConfigListReply;
-import no.nb.nna.veidemann.api.ControllerProto.RoleList;
-import no.nb.nna.veidemann.api.ControllerProto.RoleMappingsListReply;
-import no.nb.nna.veidemann.api.ControllerProto.RoleMappingsListRequest;
-import no.nb.nna.veidemann.api.ControllerProto.RunCrawlReply;
-import no.nb.nna.veidemann.api.ControllerProto.RunCrawlRequest;
-import no.nb.nna.veidemann.api.ControllerProto.SeedListReply;
-import no.nb.nna.veidemann.api.ControllerProto.SeedListRequest;
 import no.nb.nna.veidemann.api.StatusProto.JobExecutionsListReply;
 import no.nb.nna.veidemann.api.StatusProto.ListJobExecutionsRequest;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.ConfigRef;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.Role;
+import no.nb.nna.veidemann.api.controller.v1.ControllerGrpc;
+import no.nb.nna.veidemann.api.controller.v1.ExecutionId;
+import no.nb.nna.veidemann.api.controller.v1.OpenIdConnectIssuerReply;
+import no.nb.nna.veidemann.api.controller.v1.RoleList;
+import no.nb.nna.veidemann.api.controller.v1.RunCrawlReply;
+import no.nb.nna.veidemann.api.controller.v1.RunCrawlRequest;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionStatus;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
 import no.nb.nna.veidemann.commons.auth.AllowedRoles;
 import no.nb.nna.veidemann.commons.auth.RolesContextKey;
-import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
-import no.nb.nna.veidemann.commons.util.CrawlScopes;
+import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +46,6 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
-import static no.nb.nna.veidemann.controller.JobExecutionUtil.handleGet;
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.submitSeeds;
 
 /**
@@ -82,455 +56,14 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     private static final Logger LOG = LoggerFactory.getLogger(ControllerService.class);
 
     private final ConfigAdapter db;
+    private final ExecutionsAdapter executionsAdapter;
 
     private final Settings settings;
 
     public ControllerService(Settings settings) {
         this.settings = settings;
         this.db = DbService.getInstance().getConfigAdapter();
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getCrawlEntity(GetRequest request, StreamObserver<CrawlEntity> responseObserver) {
-        handleGet(() -> db.getCrawlEntity(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void saveEntity(CrawlEntity request, StreamObserver<CrawlEntity> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveCrawlEntity(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listCrawlEntities(ListRequest request, StreamObserver<CrawlEntityListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listCrawlEntities(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void deleteEntity(CrawlEntity request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteCrawlEntity(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getCrawlScheduleConfig(GetRequest request, StreamObserver<CrawlScheduleConfig> responseObserver) {
-        handleGet(() -> db.getCrawlScheduleConfig(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void deleteCrawlScheduleConfig(CrawlScheduleConfig request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteCrawlScheduleConfig(request));
-            responseObserver.onCompleted();
-
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void saveCrawlScheduleConfig(CrawlScheduleConfig request, StreamObserver<CrawlScheduleConfig> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveCrawlScheduleConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listCrawlScheduleConfigs(ListRequest request,
-                                         StreamObserver<CrawlScheduleConfigListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listCrawlScheduleConfigs(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getCrawlConfig(GetRequest request, StreamObserver<CrawlConfig> responseObserver) {
-        handleGet(() -> db.getCrawlConfig(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void deleteCrawlConfig(CrawlConfig request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteCrawlConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void saveCrawlConfig(CrawlConfig request, StreamObserver<CrawlConfig> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveCrawlConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listCrawlConfigs(ListRequest request, StreamObserver<CrawlConfigListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listCrawlConfigs(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void getCrawlJob(GetRequest request, StreamObserver<CrawlJob> responseObserver) {
-        handleGet(() -> db.getCrawlJob(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void deleteCrawlJob(CrawlJob request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteCrawlJob(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void saveCrawlJob(CrawlJob request, StreamObserver<CrawlJob> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveCrawlJob(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void listCrawlJobs(ListRequest request, StreamObserver<CrawlJobListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listCrawlJobs(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getSeed(GetRequest request, StreamObserver<Seed> responseObserver) {
-        handleGet(() -> db.getSeed(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void deleteSeed(Seed request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteSeed(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void saveSeed(Seed request, StreamObserver<Seed> responseObserver) {
-        try {
-            // If scope is not set, apply default scope
-            if (request.getScope().getSurtPrefix().isEmpty()) {
-                String scope = CrawlScopes.generateDomainScope(request.getMeta().getName());
-                request = request.toBuilder().setScope(request.getScope().toBuilder().setSurtPrefix(scope)).build();
-            }
-
-            responseObserver.onNext(db.saveSeed(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listSeeds(SeedListRequest request, StreamObserver<SeedListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listSeeds(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getBrowserConfig(GetRequest request, StreamObserver<BrowserConfig> responseObserver) {
-        handleGet(() -> db.getBrowserConfig(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void deleteBrowserConfig(BrowserConfig request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteBrowserConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void saveBrowserConfig(BrowserConfig request,
-                                  StreamObserver<BrowserConfig> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveBrowserConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listBrowserConfigs(ListRequest request,
-                                   StreamObserver<BrowserConfigListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listBrowserConfigs(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getPolitenessConfig(GetRequest request, StreamObserver<PolitenessConfig> responseObserver) {
-        handleGet(() -> db.getPolitenessConfig(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void deletePolitenessConfig(PolitenessConfig request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deletePolitenessConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void savePolitenessConfig(PolitenessConfig request, StreamObserver<PolitenessConfig> responseObserver) {
-        try {
-            responseObserver.onNext(db.savePolitenessConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listPolitenessConfigs(ListRequest request, StreamObserver<PolitenessConfigListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listPolitenessConfigs(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getBrowserScript(GetRequest request, StreamObserver<BrowserScript> responseObserver) {
-        handleGet(() -> db.getBrowserScript(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void saveBrowserScript(BrowserScript request, StreamObserver<BrowserScript> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveBrowserScript(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listBrowserScripts(ListRequest request,
-                                   StreamObserver<BrowserScriptListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listBrowserScripts(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void deleteBrowserScript(BrowserScript request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteBrowserScript(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getCrawlHostGroupConfig(GetRequest request, StreamObserver<CrawlHostGroupConfig> responseObserver) {
-        handleGet(() -> db.getCrawlHostGroupConfig(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void saveCrawlHostGroupConfig(CrawlHostGroupConfig request, StreamObserver<CrawlHostGroupConfig> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveCrawlHostGroupConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void listCrawlHostGroupConfigs(ListRequest request,
-                                          StreamObserver<CrawlHostGroupConfigListReply> responseObserver) {
-        try {
-            responseObserver.onNext(db.listCrawlHostGroupConfigs(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void deleteCrawlHostGroupConfig(CrawlHostGroupConfig request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteCrawlHostGroupConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
-    public void saveLogConfig(LogLevels request, StreamObserver<LogLevels> responseObserver) {
-        try {
-            responseObserver.onNext(db.saveLogConfig(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
-    public void getLogConfig(Empty request, StreamObserver<LogLevels> responseObserver) {
-        try {
-            responseObserver.onNext(db.getLogConfig());
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
+        this.executionsAdapter = DbService.getInstance().getExecutionsAdapter();
     }
 
     @Override
@@ -589,40 +122,31 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.ADMIN})
-    public void listRoleMappings(RoleMappingsListRequest request, StreamObserver<RoleMappingsListReply> responseObserver) {
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    public void abortCrawlExecution(ExecutionId request, StreamObserver<CrawlExecutionStatus> responseObserver) {
         try {
-            responseObserver.onNext(db.listRoleMappings(request));
+            CrawlExecutionStatus status = executionsAdapter.setCrawlExecutionStateAborted(request.getId());
+
+            responseObserver.onNext(status);
             responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
+        } catch (Exception e) {
+            LOG.error(e.getMessage(), e);
+            Status status = Status.UNKNOWN.withDescription(e.toString());
             responseObserver.onError(status.asException());
         }
     }
 
     @Override
-    @AllowedRoles({Role.ADMIN})
-    public void saveRoleMapping(RoleMapping request, StreamObserver<RoleMapping> responseObserver) {
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    public void abortJobExecution(ExecutionId request, StreamObserver<JobExecutionStatus> responseObserver) {
         try {
-            responseObserver.onNext(db.saveRoleMapping(request));
-            responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
+            JobExecutionStatus status = executionsAdapter.setJobExecutionStateAborted(request.getId());
 
-    @Override
-    @AllowedRoles({Role.ADMIN})
-    public void deleteRoleMapping(RoleMapping request, StreamObserver<Empty> responseObserver) {
-        try {
-            responseObserver.onNext(db.deleteRoleMapping(request));
+            responseObserver.onNext(status);
             responseObserver.onCompleted();
-        } catch (Exception ex) {
-            LOG.error(ex.getMessage(), ex);
-            Status status = Status.UNKNOWN.withDescription(ex.toString());
+        } catch (Exception e) {
+            LOG.error(e.getMessage(), e);
+            Status status = Status.UNKNOWN.withDescription(e.toString());
             responseObserver.onError(status.asException());
         }
     }
@@ -630,9 +154,9 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     @Override
     public void getRolesForActiveUser(Empty request, StreamObserver<RoleList> responseObserver) {
         try {
-            Collection<ConfigProto.Role> roles = RolesContextKey.roles()
+            Collection<Role> roles = RolesContextKey.roles()
                     .stream()
-                    .map(r -> ConfigProto.Role.valueOf(r.name()))
+                    .map(r -> Role.valueOf(r.name()))
                     .collect(Collectors.toSet());
             if (roles == null) {
                 responseObserver.onNext(RoleList.newBuilder().build());

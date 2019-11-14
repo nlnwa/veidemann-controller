@@ -90,21 +90,6 @@ public class StatusService extends StatusGrpc.StatusImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
-    public void abortExecution(ExecutionId request, StreamObserver<CrawlExecutionStatus> responseObserver) {
-        try {
-            CrawlExecutionStatus status = db.setCrawlExecutionStateAborted(request.getId());
-
-            responseObserver.onNext(status);
-            responseObserver.onCompleted();
-        } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
-            Status status = Status.UNKNOWN.withDescription(e.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
     @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
     public void getJobExecution(ExecutionId request, StreamObserver<JobExecutionStatus> responseObserver) {
         handleGet(() -> db.getJobExecutionStatus(request.getId()), responseObserver);
@@ -119,21 +104,6 @@ public class StatusService extends StatusGrpc.StatusImplBase {
         } catch (Exception ex) {
             LOG.error(ex.getMessage(), ex);
             Status status = Status.UNKNOWN.withDescription(ex.toString());
-            responseObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
-    public void abortJobExecution(ExecutionId request, StreamObserver<JobExecutionStatus> responseObserver) {
-        try {
-            JobExecutionStatus status = db.setJobExecutionStateAborted(request.getId());
-
-            responseObserver.onNext(status);
-            responseObserver.onCompleted();
-        } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
-            Status status = Status.UNKNOWN.withDescription(e.toString());
             responseObserver.onError(status.asException());
         }
     }

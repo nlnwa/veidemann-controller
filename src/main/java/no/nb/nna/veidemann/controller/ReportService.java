@@ -29,8 +29,6 @@ import no.nb.nna.veidemann.api.ReportProto.ExecuteDbQueryReply;
 import no.nb.nna.veidemann.api.ReportProto.ExecuteDbQueryRequest;
 import no.nb.nna.veidemann.api.ReportProto.PageLogListReply;
 import no.nb.nna.veidemann.api.ReportProto.PageLogListRequest;
-import no.nb.nna.veidemann.api.ReportProto.ScreenshotListReply;
-import no.nb.nna.veidemann.api.ReportProto.ScreenshotListRequest;
 import no.nb.nna.veidemann.api.config.v1.Role;
 import no.nb.nna.veidemann.commons.auth.AllowedRoles;
 import no.nb.nna.veidemann.commons.db.DbAdapter;
@@ -77,19 +75,6 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     public void listPageLogs(PageLogListRequest request, StreamObserver<PageLogListReply> respObserver) {
         try {
             respObserver.onNext(db.listPageLogs(request));
-            respObserver.onCompleted();
-        } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
-            Status status = Status.UNKNOWN.withDescription(e.toString());
-            respObserver.onError(status.asException());
-        }
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
-    public void listScreenshots(ScreenshotListRequest request, StreamObserver<ScreenshotListReply> respObserver) {
-        try {
-            respObserver.onNext(db.listScreenshots(request));
             respObserver.onCompleted();
         } catch (Exception e) {
             LOG.error(e.getMessage(), e);
