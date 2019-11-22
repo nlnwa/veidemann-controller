@@ -93,7 +93,9 @@ public class ControllerServiceTest {
     @After
     public void afterEachTest() {
         inProcessChannel.shutdownNow();
-        inProcessServer.close();
+        if (inProcessServer != null) {
+            inProcessServer.close();
+        }
     }
 
     @Test

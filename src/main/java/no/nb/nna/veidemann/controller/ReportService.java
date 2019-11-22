@@ -22,65 +22,115 @@ import com.rethinkdb.net.Cursor;
 import io.grpc.Status;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
-import no.nb.nna.veidemann.api.ReportGrpc;
-import no.nb.nna.veidemann.api.ReportProto.CrawlLogListReply;
-import no.nb.nna.veidemann.api.ReportProto.CrawlLogListRequest;
-import no.nb.nna.veidemann.api.ReportProto.ExecuteDbQueryReply;
-import no.nb.nna.veidemann.api.ReportProto.ExecuteDbQueryRequest;
-import no.nb.nna.veidemann.api.ReportProto.PageLogListReply;
-import no.nb.nna.veidemann.api.ReportProto.PageLogListRequest;
 import no.nb.nna.veidemann.api.config.v1.Role;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionStatus;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlLog;
+import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
+import no.nb.nna.veidemann.api.frontier.v1.PageLog;
+import no.nb.nna.veidemann.api.report.v1.CrawlExecutionsListRequest;
+import no.nb.nna.veidemann.api.report.v1.CrawlLogListRequest;
+import no.nb.nna.veidemann.api.report.v1.ExecuteDbQueryReply;
+import no.nb.nna.veidemann.api.report.v1.ExecuteDbQueryRequest;
+import no.nb.nna.veidemann.api.report.v1.JobExecutionsListRequest;
+import no.nb.nna.veidemann.api.report.v1.ListCountResponse;
+import no.nb.nna.veidemann.api.report.v1.PageLogListRequest;
+import no.nb.nna.veidemann.api.report.v1.ReportGrpc;
 import no.nb.nna.veidemann.commons.auth.AllowedRoles;
-import no.nb.nna.veidemann.commons.db.DbAdapter;
+import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.DbService;
+import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.controller.query.QueryEngine;
-import no.nb.nna.veidemann.db.RethinkDbAdapter;
+import no.nb.nna.veidemann.db.RethinkDbConnection;
+import no.nb.nna.veidemann.db.initializer.RethinkDbInitializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeoutException;
 
+import static no.nb.nna.veidemann.controller.JobExecutionUtil.handleGet;
+
 /**
  *
  */
 public class ReportService extends ReportGrpc.ReportImplBase {
-
     private static final Logger LOG = LoggerFactory.getLogger(ReportService.class);
 
-    private final DbAdapter db;
+    private final ExecutionsAdapter executionsAdapter;
 
     private final Gson gson;
 
     public ReportService() {
-        this.db = DbService.getInstance().getDbAdapter();
+        this.executionsAdapter = DbService.getInstance().getExecutionsAdapter();
         gson = new GsonBuilder()
                 .create();
     }
 
     @Override
     @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
-    public void listCrawlLogs(CrawlLogListRequest request, StreamObserver<CrawlLogListReply> respObserver) {
-        try {
-            respObserver.onNext(db.listCrawlLogs(request));
-            respObserver.onCompleted();
-        } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
-            Status status = Status.UNKNOWN.withDescription(e.toString());
-            respObserver.onError(status.asException());
-        }
+    public void listCrawlLogs(CrawlLogListRequest request, StreamObserver<CrawlLog> responseObserver) {
+        new Thread(() -> {
+            try (ChangeFeed<CrawlLog> c = executionsAdapter.listCrawlLogs(request);) {
+                c.stream().forEach(o -> responseObserver.onNext(o));
+                responseObserver.onCompleted();
+            } catch (Exception ex) {
+                LOG.error(ex.getMessage(), ex);
+                Status status = Status.UNKNOWN.withDescription(ex.toString());
+                responseObserver.onError(status.asException());
+            }
+        }).start();
+    }
+
+    @Override
+    public void countCrawlLogs(CrawlLogListRequest request, StreamObserver<ListCountResponse> responseObserver) {
+        handleGet(() -> executionsAdapter.countCrawlLogs(request), responseObserver);
     }
 
     @Override
     @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
-    public void listPageLogs(PageLogListRequest request, StreamObserver<PageLogListReply> respObserver) {
-        try {
-            respObserver.onNext(db.listPageLogs(request));
-            respObserver.onCompleted();
-        } catch (Exception e) {
-            LOG.error(e.getMessage(), e);
-            Status status = Status.UNKNOWN.withDescription(e.toString());
-            respObserver.onError(status.asException());
-        }
+    public void listPageLogs(PageLogListRequest request, StreamObserver<PageLog> responseObserver) {
+        new Thread(() -> {
+            try (ChangeFeed<PageLog> c = executionsAdapter.listPageLogs(request);) {
+                c.stream().forEach(o -> responseObserver.onNext(o));
+                responseObserver.onCompleted();
+            } catch (Exception ex) {
+                LOG.error(ex.getMessage(), ex);
+                Status status = Status.UNKNOWN.withDescription(ex.toString());
+                responseObserver.onError(status.asException());
+            }
+        }).start();
+    }
+
+    @Override
+    public void countPageLogs(PageLogListRequest request, StreamObserver<ListCountResponse> responseObserver) {
+        handleGet(() -> executionsAdapter.countPageLogs(request), responseObserver);
+    }
+
+    @Override
+    public void listExecutions(CrawlExecutionsListRequest request, StreamObserver<CrawlExecutionStatus> responseObserver) {
+        new Thread(() -> {
+            try (ChangeFeed<CrawlExecutionStatus> c = executionsAdapter.listCrawlExecutionStatus(request);) {
+                c.stream().forEach(o -> responseObserver.onNext(o));
+                responseObserver.onCompleted();
+            } catch (Exception ex) {
+                LOG.error(ex.getMessage(), ex);
+                Status status = Status.UNKNOWN.withDescription(ex.toString());
+                responseObserver.onError(status.asException());
+            }
+        }).start();
+    }
+
+    @Override
+    public void listJobExecutions(JobExecutionsListRequest request, StreamObserver<JobExecutionStatus> responseObserver) {
+        new Thread(() -> {
+            try (ChangeFeed<JobExecutionStatus> c = executionsAdapter.listJobExecutionStatus(request);) {
+                c.stream().forEach(o -> responseObserver.onNext(o));
+                responseObserver.onCompleted();
+            } catch (Exception ex) {
+                LOG.error(ex.getMessage(), ex);
+                Status status = Status.UNKNOWN.withDescription(ex.toString());
+                responseObserver.onError(status.asException());
+            }
+        }).start();
     }
 
     @Override
@@ -95,7 +145,8 @@ public class ReportService extends ReportGrpc.ReportImplBase {
                 limit = 50;
             }
 
-            Object result = ((RethinkDbAdapter) db).executeRequest("js-query", qry);
+            RethinkDbConnection conn = ((RethinkDbInitializer) DbService.getInstance().getDbInitializer()).getDbConnection();
+            Object result = conn.exec("js-query", qry);
             if (result != null) {
                 if (result instanceof Cursor) {
                     try (Cursor c = (Cursor) result) {

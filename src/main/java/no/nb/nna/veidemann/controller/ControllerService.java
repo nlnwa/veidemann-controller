@@ -18,8 +18,6 @@ package no.nb.nna.veidemann.controller;
 import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import no.nb.nna.veidemann.api.StatusProto.JobExecutionsListReply;
-import no.nb.nna.veidemann.api.StatusProto.ListJobExecutionsRequest;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.ConfigRef;
 import no.nb.nna.veidemann.api.config.v1.Kind;
@@ -32,8 +30,11 @@ import no.nb.nna.veidemann.api.controller.v1.RunCrawlReply;
 import no.nb.nna.veidemann.api.controller.v1.RunCrawlRequest;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionStatus;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
+import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus.State;
+import no.nb.nna.veidemann.api.report.v1.JobExecutionsListRequest;
 import no.nb.nna.veidemann.commons.auth.AllowedRoles;
 import no.nb.nna.veidemann.commons.auth.RolesContextKey;
+import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
@@ -81,11 +82,11 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
             JobExecutionStatus jobExecutionStatus;
             boolean addToRunningJob = false;
 
-            JobExecutionsListReply runningJobsRequest = DbService.getInstance().getExecutionsAdapter()
-                    .listJobExecutionStatus(ListJobExecutionsRequest.newBuilder()
-                            .addState("RUNNING").build());
+            ChangeFeed<JobExecutionStatus> runningJobsR = DbService.getInstance().getExecutionsAdapter()
+                    .listJobExecutionStatus(JobExecutionsListRequest.newBuilder()
+                            .addState(State.RUNNING).build());
 
-            List<JobExecutionStatus> runningJobs = runningJobsRequest.getValueList()
+            List<JobExecutionStatus> runningJobs = runningJobsR
                     .stream()
                     .filter(jes -> jes.getJobId().equals(request.getJobId()))
                     .collect(Collectors.toList());

@@ -2,11 +2,11 @@ package no.nb.nna.veidemann.controller;
 
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
-import no.nb.nna.veidemann.api.StatusProto.ListExecutionsRequest;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.ListRequest;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
+import no.nb.nna.veidemann.api.report.v1.CrawlExecutionsListRequest;
 import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
@@ -66,11 +66,15 @@ public class JobExecutionUtil {
         if (!seed.getSeed().getDisabled()) {
 
             if (addToRunningJob) {
-                ListExecutionsRequest.Builder req = ListExecutionsRequest.newBuilder()
+                CrawlExecutionsListRequest.Builder req = CrawlExecutionsListRequest.newBuilder();
+                req.getQueryTemplateBuilder()
                         .setSeedId(seed.getId())
                         .setJobExecutionId(jobExecutionStatus.getId());
+                req.getQueryMaskBuilder()
+                        .addPaths("seedId")
+                        .addPaths("jobExecutionId");
                 try {
-                    if (DbService.getInstance().getExecutionsAdapter().listCrawlExecutionStatus(req.build()).getCount() > 0) {
+                    if (DbService.getInstance().getExecutionsAdapter().listCrawlExecutionStatus(req.build()).stream().findAny().isPresent()) {
                         LOG.debug("Seed '{}' is already crawling for jobExecution {}", seed.getMeta().getName(), jobExecutionStatus.getId());
                         return false;
                     }

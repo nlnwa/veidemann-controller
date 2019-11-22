@@ -91,7 +91,6 @@ public class ControllerApiServer implements AutoCloseable {
         server = serverBuilder
                 .addService(createService(new ConfigService(), interceptors))
                 .addService(createService(new ControllerService(settings), interceptors))
-                .addService(createService(new StatusService(), interceptors))
                 .addService(createService(new ReportService(), interceptors))
                 .addService(createService(new EventService(), interceptors))
                 .build();
