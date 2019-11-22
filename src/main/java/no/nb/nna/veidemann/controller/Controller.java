@@ -20,10 +20,6 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigBeanFactory;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
-import no.nb.nna.veidemann.commons.auth.AuAuServerInterceptor;
-import no.nb.nna.veidemann.commons.auth.IdTokenAuAuServerInterceptor;
-import no.nb.nna.veidemann.commons.auth.IdTokenValidator;
-import no.nb.nna.veidemann.commons.auth.NoopAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.UserRoleMapper;
 import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
@@ -64,17 +60,18 @@ public class Controller {
     }
 
     /**
-     * Start the service.
+     * Start the controller service.
      * <p>
      *
      * @return this instance
      */
     public Controller start() {
+        UserRoleMapper userRoleMapper = new UserRoleMapper();
         try (DbService db = DbService.configure(SETTINGS);
              FrontierClient urlFrontierClient = new FrontierClient(SETTINGS.getFrontierHost(), SETTINGS
                      .getFrontierPort(), "url");
 
-             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, getAuAuServerInterceptor()).start();
+             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper).start();
 
              CrawlJobScheduler scheduler = new CrawlJobScheduler().start();) {
 
@@ -88,9 +85,6 @@ public class Controller {
         } catch (ConfigException | DbException ex) {
             LOG.error("Configuration error: {}", ex.getLocalizedMessage());
             System.exit(1);
-        } catch (InterruptedException ex) {
-            LOG.error("Interrupted", ex);
-            System.exit(2);
         }
 
         return this;
@@ -106,25 +100,4 @@ public class Controller {
         return SETTINGS;
     }
 
-    private AuAuServerInterceptor getAuAuServerInterceptor() throws InterruptedException {
-        String issuerUrl = SETTINGS.getOpenIdConnectIssuer();
-        if (issuerUrl == null || issuerUrl.isEmpty()) {
-            return new NoopAuAuServerInterceptor();
-        } else {
-            IdTokenValidator idTokenValidator = null;
-
-            // Retry for 400 seconds if IDP doesn't respond
-            int retryAttempts = 0;
-            while (idTokenValidator == null && retryAttempts < 20) {
-                try {
-                    idTokenValidator = new IdTokenValidator(issuerUrl);
-                } catch (Exception e) {
-                    retryAttempts++;
-                    Thread.sleep(20000);
-                }
-            }
-
-            return new IdTokenAuAuServerInterceptor(new UserRoleMapper(), idTokenValidator);
-        }
-    }
 }

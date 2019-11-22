@@ -55,7 +55,7 @@ public class CrawlJobCollector implements TaskCollector {
 
         try {
             // Do not schedule jobs if Veidemann is paused.
-            if (DbService.getInstance().getDbAdapter().isPaused()) {
+            if (DbService.getInstance().getExecutionsAdapter().isPaused()) {
                 return tasks;
             }
 

@@ -16,6 +16,7 @@
 
 package no.nb.nna.veidemann.controller;
 
+import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import no.nb.nna.veidemann.api.config.v1.ConfigGrpc;
@@ -27,10 +28,12 @@ import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.LabelKeysResponse;
 import no.nb.nna.veidemann.api.config.v1.ListCountResponse;
 import no.nb.nna.veidemann.api.config.v1.ListRequest;
+import no.nb.nna.veidemann.api.config.v1.LogLevels;
 import no.nb.nna.veidemann.api.config.v1.Role;
 import no.nb.nna.veidemann.api.config.v1.UpdateRequest;
 import no.nb.nna.veidemann.api.config.v1.UpdateResponse;
 import no.nb.nna.veidemann.commons.auth.AllowedRoles;
+import no.nb.nna.veidemann.commons.auth.Authorisations;
 import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
@@ -57,7 +60,10 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @Authorisations({
+            @AllowedRoles(value = {Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+    })
     public void listConfigObjects(ListRequest request, StreamObserver<ConfigObject> responseObserver) {
         new Thread(new Runnable() {
             @Override
@@ -76,13 +82,19 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @Authorisations({
+            @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+    })
     public void countConfigObjects(ListRequest request, StreamObserver<ListCountResponse> responseObserver) {
         handleGet(() -> db.countConfigObjects(request), responseObserver);
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @Authorisations({
+            @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+    })
     public void saveConfigObject(ConfigObject request, StreamObserver<ConfigObject> responseObserver) {
         try {
             // If kind is seed and scope is not set, apply default scope
@@ -103,7 +115,10 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @Authorisations({
+            @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+    })
     public void updateConfigObjects(UpdateRequest request, StreamObserver<UpdateResponse> responseObserver) {
         try {
             responseObserver.onNext(db.updateConfigObjects(request));
@@ -116,7 +131,10 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.ADMIN})
+    @Authorisations({
+            @AllowedRoles({Role.ADMIN}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+    })
     public void deleteConfigObject(ConfigObject request, StreamObserver<DeleteResponse> responseObserver) {
         try {
             responseObserver.onNext(db.deleteConfigObject(request));
@@ -129,8 +147,37 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @Authorisations({
+            @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+    })
     public void getLabelKeys(GetLabelKeysRequest request, StreamObserver<LabelKeysResponse> responseObserver) {
         handleGet(() -> db.getLabelKeys(request), responseObserver);
+    }
+
+    @Override
+    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    public void saveLogConfig(LogLevels request, StreamObserver<LogLevels> responseObserver) {
+        try {
+            responseObserver.onNext(db.saveLogConfig(request));
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            LOG.error(ex.getMessage(), ex);
+            Status status = Status.UNKNOWN.withDescription(ex.toString());
+            responseObserver.onError(status.asException());
+        }
+    }
+
+    @Override
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    public void getLogConfig(Empty request, StreamObserver<LogLevels> responseObserver) {
+        try {
+            responseObserver.onNext(db.getLogConfig());
+            responseObserver.onCompleted();
+        } catch (Exception ex) {
+            LOG.error(ex.getMessage(), ex);
+            Status status = Status.UNKNOWN.withDescription(ex.toString());
+            responseObserver.onError(status.asException());
+        }
     }
 }

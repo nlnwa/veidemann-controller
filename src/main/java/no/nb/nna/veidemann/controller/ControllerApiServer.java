@@ -15,15 +15,22 @@
  */
 package no.nb.nna.veidemann.controller;
 
+import io.grpc.BindableService;
 import io.grpc.Server;
 import io.grpc.ServerBuilder;
+import io.grpc.ServerInterceptor;
+import io.grpc.ServerInterceptors;
+import io.grpc.ServerServiceDefinition;
 import io.opentracing.contrib.ServerTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
 import no.nb.nna.veidemann.commons.auth.ApiKeyAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapper;
+import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapperFromConfig;
 import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapperFromFile;
-import no.nb.nna.veidemann.commons.auth.AuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.AuthorisationAuAuServerInterceptor;
+import no.nb.nna.veidemann.commons.auth.IdTokenAuAuServerInterceptor;
+import no.nb.nna.veidemann.commons.auth.IdTokenValidator;
+import no.nb.nna.veidemann.commons.auth.UserRoleMapper;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,6 +38,8 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  *
@@ -39,19 +48,34 @@ public class ControllerApiServer implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ControllerApiServer.class);
 
-    private final Server server;
+    private final ServerBuilder<?> serverBuilder;
+    private Server server;
+    final UserRoleMapper userRoleMapper;
+    final Settings settings;
 
-    public ControllerApiServer(Settings settings, AuAuServerInterceptor auAuServerInterceptor) {
-        this(settings, ServerBuilder.forPort(settings.getApiPort()), auAuServerInterceptor);
+    public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper) {
+        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper);
     }
 
-    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder,
-                               AuAuServerInterceptor auAuServerInterceptor) {
+    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper) {
+        this.settings = settings;
+        this.serverBuilder = serverBuilder;
+        this.userRoleMapper = userRoleMapper;
+    }
 
+    public ControllerApiServer start() {
         ServerTracingInterceptor tracingInterceptor = new ServerTracingInterceptor.Builder(GlobalTracer.get())
                 .withTracedAttributes(ServerTracingInterceptor.ServerRequestAttribute.CALL_ATTRIBUTES,
                         ServerTracingInterceptor.ServerRequestAttribute.METHOD_TYPE)
                 .build();
+
+        List<ServerInterceptor> interceptors = new ArrayList<>();
+        interceptors.add(tracingInterceptor);
+        try {
+            interceptors = getAuAuServerInterceptors(interceptors);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
 
         // Use secure transport if certChain and private key are available
         File certDir = new File("/veidemann/tls");
@@ -64,33 +88,13 @@ public class ControllerApiServer implements AutoCloseable {
             LOG.warn("No CA certificate found. Protocol will use insecure plain text.");
         }
 
-        AuthorisationAuAuServerInterceptor authorisationInterceptor = new AuthorisationAuAuServerInterceptor();
-        ApiKeyRoleMapper apiKeyRoleMapper = new ApiKeyRoleMapperFromFile(Controller.getSettings().getApiKeyRoleMappingFile());
-        ApiKeyAuAuServerInterceptor apiKeyAuAuServerInterceptor = new ApiKeyAuAuServerInterceptor(apiKeyRoleMapper);
-
         server = serverBuilder
-                .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(
-                                authorisationInterceptor.intercept(new ConfigService()))))
-                .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(
-                                authorisationInterceptor.intercept(new ControllerService(settings)))))
-                .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(
-                                apiKeyAuAuServerInterceptor.intercept(
-                                        authorisationInterceptor.intercept(new StatusService())))))
-                .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(
-                                apiKeyAuAuServerInterceptor.intercept(
-                                        authorisationInterceptor.intercept(new ReportService())))))
-                .addService(tracingInterceptor.intercept(
-                        auAuServerInterceptor.intercept(
-                                apiKeyAuAuServerInterceptor.intercept(
-                                        authorisationInterceptor.intercept(new EventService())))))
+                .addService(createService(new ConfigService(), interceptors))
+                .addService(createService(new ControllerService(settings), interceptors))
+                .addService(createService(new ReportService(), interceptors))
+                .addService(createService(new EventService(), interceptors))
                 .build();
-    }
 
-    public ControllerApiServer start() {
         try {
             server.start();
 
@@ -111,6 +115,10 @@ public class ControllerApiServer implements AutoCloseable {
             close();
             throw new UncheckedIOException(ex);
         }
+    }
+
+    private ServerServiceDefinition createService(BindableService service, List<ServerInterceptor> interceptors) {
+        return ServerInterceptors.interceptForward(new AuthorisationAuAuServerInterceptor(service).intercept(service), interceptors);
     }
 
     @Override
@@ -135,4 +143,29 @@ public class ControllerApiServer implements AutoCloseable {
         }
     }
 
+    List<ServerInterceptor> getAuAuServerInterceptors(List<ServerInterceptor> interceptors) throws InterruptedException {
+        String issuerUrl = settings.getOpenIdConnectIssuer();
+        if (issuerUrl != null && !issuerUrl.isEmpty()) {
+            IdTokenValidator idTokenValidator = null;
+
+            // Retry for 400 seconds if IDP doesn't respond
+            int retryAttempts = 0;
+            while (idTokenValidator == null && retryAttempts < 20) {
+                try {
+                    idTokenValidator = new IdTokenValidator(issuerUrl);
+                } catch (Exception e) {
+                    retryAttempts++;
+                    Thread.sleep(20000);
+                }
+            }
+
+            interceptors.add(new IdTokenAuAuServerInterceptor(userRoleMapper, idTokenValidator));
+        }
+        ApiKeyRoleMapper apiKeyDbRoleMapper = new ApiKeyRoleMapperFromConfig(userRoleMapper);
+        interceptors.add(new ApiKeyAuAuServerInterceptor(apiKeyDbRoleMapper));
+
+        ApiKeyRoleMapper apiKeyFileRoleMapper = new ApiKeyRoleMapperFromFile(settings.getApiKeyRoleMappingFile());
+        interceptors.add(new ApiKeyAuAuServerInterceptor(apiKeyFileRoleMapper));
+        return interceptors;
+    }
 }
