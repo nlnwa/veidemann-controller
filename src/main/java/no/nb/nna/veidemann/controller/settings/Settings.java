@@ -32,6 +32,8 @@ public class Settings extends CommonSettings {
 
     private String apiKeyRoleMappingFile;
 
+    private boolean skipAuthentication;
+
     public int getApiPort() {
         return apiPort;
     }
@@ -70,5 +72,13 @@ public class Settings extends CommonSettings {
 
     public void setApiKeyRoleMappingFile(String apiKeyRoleMappingFile) {
         this.apiKeyRoleMappingFile = apiKeyRoleMappingFile;
+    }
+
+    public boolean getSkipAuthentication() {
+        return skipAuthentication;
+    }
+
+    public void setSkipAuthentication(boolean skipAuthentication) {
+        this.skipAuthentication = skipAuthentication;
     }
 }

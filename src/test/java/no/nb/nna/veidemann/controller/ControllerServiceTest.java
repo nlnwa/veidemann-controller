@@ -39,6 +39,7 @@ import no.nb.nna.veidemann.commons.auth.AuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.EmailContextKey;
 import no.nb.nna.veidemann.commons.auth.IdTokenAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.IdTokenValidator;
+import no.nb.nna.veidemann.commons.auth.NoopAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.UserRoleMapper;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
@@ -144,7 +145,7 @@ public class ControllerServiceTest {
             when(roleMapperMock.getRolesForUser(eq("user@example.com"), anyList(), anyCollection()))
                     .thenReturn(Lists.newArrayList(Role.ANY_USER, Role.READONLY));
 
-            inProcessServer = new ControllerApiServerMock(idValidatorMock, inProcessServerBuilder, roleMapperMock).start();
+            inProcessServer = new ControllerApiServerMock(new Settings(), idValidatorMock, inProcessServerBuilder, roleMapperMock).start();
 
             assertThat(blockingStub.withCallCredentials(cred).getConfigObject(entityRef))
                     .isSameAs(coEntity);
@@ -158,6 +159,40 @@ public class ControllerServiceTest {
         }
     }
 
+    @Test
+    public void testSkipAuthentication() throws DbException {
+        DbServiceSPI dbProviderMock = mock(DbServiceSPI.class);
+        ConfigAdapter dbMock = mock(ConfigAdapter.class);
+        when(dbProviderMock.getConfigAdapter()).thenReturn(dbMock);
+        try (DbService db = DbService.configure(dbProviderMock)) {
+            ConfigObject coEntity = ConfigObject.newBuilder()
+                    .setKind(Kind.crawlEntity)
+                    .build();
+
+            ConfigRef entityRef = ConfigRef.newBuilder()
+                    .setKind(Kind.crawlEntity)
+                    .build();
+
+            when(dbMock.getConfigObject(entityRef))
+                    .thenReturn(coEntity);
+            when(dbMock.saveConfigObject(coEntity))
+                    .thenAnswer((Answer<ConfigObject>) invocation -> {
+                        assertThat(EmailContextKey.email()).isEqualTo(null);
+                        return coEntity;
+                    });
+
+            Settings settings = new Settings();
+            settings.setSkipAuthentication(true);
+            inProcessServer = new ControllerApiServerMock(settings, null, inProcessServerBuilder, null).start();
+
+            assertThat(blockingStub.getConfigObject(entityRef))
+                    .isSameAs(coEntity);
+
+            assertThat(blockingStub.saveConfigObject(coEntity))
+                    .isSameAs(coEntity);
+        }
+    }
+
     private class ControllerApiServerMock extends ControllerApiServer {
         final IdTokenValidator idValidator;
 
@@ -167,13 +202,18 @@ public class ControllerServiceTest {
             return this;
         }
 
-        public ControllerApiServerMock(IdTokenValidator idValidator, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper) {
-            super(new Settings(), serverBuilder, userRoleMapper);
+        public ControllerApiServerMock(Settings settings, IdTokenValidator idValidator, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper) {
+            super(settings, serverBuilder, userRoleMapper);
             this.idValidator = idValidator;
         }
 
         @Override
         List<ServerInterceptor> getAuAuServerInterceptors(List<ServerInterceptor> interceptors) throws InterruptedException {
+            if (settings.getSkipAuthentication()) {
+                interceptors.add(new NoopAuAuServerInterceptor());
+                return interceptors;
+            }
+
             interceptors.add(new IdTokenAuAuServerInterceptor(userRoleMapper, idValidator));
 
             ApiKeyRoleMapper apiKeyDbRoleMapper = new ApiKeyRoleMapperFromConfig(userRoleMapper);
