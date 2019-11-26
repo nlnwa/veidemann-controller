@@ -30,6 +30,7 @@ import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapperFromFile;
 import no.nb.nna.veidemann.commons.auth.AuthorisationAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.IdTokenAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.IdTokenValidator;
+import no.nb.nna.veidemann.commons.auth.NoopAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.UserRoleMapper;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
@@ -144,6 +145,11 @@ public class ControllerApiServer implements AutoCloseable {
     }
 
     List<ServerInterceptor> getAuAuServerInterceptors(List<ServerInterceptor> interceptors) throws InterruptedException {
+        if (settings.getSkipAuthentication()) {
+            interceptors.add(new NoopAuAuServerInterceptor());
+            return interceptors;
+        }
+
         String issuerUrl = settings.getOpenIdConnectIssuer();
         if (issuerUrl != null && !issuerUrl.isEmpty()) {
             IdTokenValidator idTokenValidator = null;
