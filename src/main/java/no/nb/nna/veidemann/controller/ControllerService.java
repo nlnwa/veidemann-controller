@@ -155,10 +155,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     @Override
     public void getRolesForActiveUser(Empty request, StreamObserver<RoleList> responseObserver) {
         try {
-            Collection<Role> roles = RolesContextKey.roles()
-                    .stream()
-                    .map(r -> Role.valueOf(r.name()))
-                    .collect(Collectors.toSet());
+            Collection<Role> roles = RolesContextKey.roles();
             if (roles == null) {
                 responseObserver.onNext(RoleList.newBuilder().build());
             } else {
