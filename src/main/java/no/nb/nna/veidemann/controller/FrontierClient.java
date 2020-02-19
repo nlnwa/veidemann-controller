@@ -79,7 +79,7 @@ public class FrontierClient implements AutoCloseable {
         try {
             channel.shutdown().awaitTermination(5, TimeUnit.SECONDS);
         } catch (InterruptedException ex) {
-            throw new RuntimeException(ex);
+            channel.shutdownNow();
         }
     }
 
