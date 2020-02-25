@@ -71,9 +71,17 @@ public class Controller {
              FrontierClient urlFrontierClient = new FrontierClient(SETTINGS.getFrontierHost(), SETTINGS
                      .getFrontierPort(), "url");
 
-             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper).start();
+             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper);
 
-             CrawlJobScheduler scheduler = new CrawlJobScheduler().start();) {
+             CrawlJobScheduler scheduler = new CrawlJobScheduler()) {
+
+            registerShutdownHook();
+
+            scheduler.start();
+
+            apiServer.start();
+
+
 
             LOG.info("Veidemann Controller (v. {}) started", Controller.class.getPackage().getImplementationVersion());
 
@@ -88,6 +96,23 @@ public class Controller {
         }
 
         return this;
+    }
+
+    private void registerShutdownHook() {
+        Thread mainThread = Thread.currentThread();
+
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Use stderr here since the logger may have been reset by its JVM shutdown hook.
+            System.err.println("*** shutting down since JVM is shutting down");
+
+            mainThread.interrupt();
+            try {
+                mainThread.join();
+            } catch (InterruptedException e) {
+                // pass
+            }
+            System.err.println("*** gracefully shut down");
+        }));
     }
 
     /**

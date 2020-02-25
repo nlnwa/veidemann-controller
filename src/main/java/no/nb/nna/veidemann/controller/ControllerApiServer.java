@@ -41,6 +41,9 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  *
@@ -51,6 +54,7 @@ public class ControllerApiServer implements AutoCloseable {
 
     private final ServerBuilder<?> serverBuilder;
     private Server server;
+    private final ExecutorService threadPool;
     final UserRoleMapper userRoleMapper;
     final Settings settings;
 
@@ -62,6 +66,8 @@ public class ControllerApiServer implements AutoCloseable {
         this.settings = settings;
         this.serverBuilder = serverBuilder;
         this.userRoleMapper = userRoleMapper;
+        threadPool = Executors.newCachedThreadPool();
+        serverBuilder.executor(threadPool);
     }
 
     public ControllerApiServer start() {
@@ -101,16 +107,6 @@ public class ControllerApiServer implements AutoCloseable {
 
             LOG.info("Controller api listening on {}", server.getPort());
 
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    // Use stderr here since the logger may have been reset by its JVM shutdown hook.
-                    System.err.println("*** shutting down gRPC server since JVM is shutting down");
-                    ControllerApiServer.this.close();
-                }
-
-            });
-
             return this;
         } catch (IOException ex) {
             close();
@@ -125,23 +121,19 @@ public class ControllerApiServer implements AutoCloseable {
     @Override
     public void close() {
         if (server != null) {
-            server.shutdown();
-        }
-        System.err.println("*** server shut down");
-    }
-
-    /**
-     * Await termination on the main thread since the grpc library uses daemon threads.
-     */
-    public void blockUntilShutdown() {
-        if (server != null) {
             try {
-                server.awaitTermination();
-            } catch (InterruptedException ex) {
-                close();
-                throw new RuntimeException(ex);
+                server.shutdown().awaitTermination(5L, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                server.shutdown();
+            }
+            threadPool.shutdown();
+            try {
+                threadPool.awaitTermination(5L, TimeUnit.SECONDS);
+            } catch (InterruptedException e) {
+                threadPool.shutdownNow();
             }
         }
+        System.err.println("*** server shut down");
     }
 
     List<ServerInterceptor> getAuAuServerInterceptors(List<ServerInterceptor> interceptors) throws InterruptedException {
