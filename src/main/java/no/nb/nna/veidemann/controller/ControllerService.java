@@ -28,6 +28,8 @@ import no.nb.nna.veidemann.api.controller.v1.OpenIdConnectIssuerReply;
 import no.nb.nna.veidemann.api.controller.v1.RoleList;
 import no.nb.nna.veidemann.api.controller.v1.RunCrawlReply;
 import no.nb.nna.veidemann.api.controller.v1.RunCrawlRequest;
+import no.nb.nna.veidemann.api.controller.v1.CrawlerStatus;
+import no.nb.nna.veidemann.api.controller.v1.RunStatus;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionStatus;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus.State;
@@ -183,4 +185,49 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
         }
     }
 
+    @Override
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    public void pauseCrawler(Empty request, StreamObserver<Empty> responseObserver) {
+        try {
+            executionsAdapter.setDesiredPausedState(true);
+            responseObserver.onNext(Empty.newBuilder().build());
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            LOG.error(e.getMessage(), e);
+            Status status = Status.UNKNOWN.withDescription(e.toString());
+            responseObserver.onError(status.asException());
+        }
+    }
+
+    @Override
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    public void unPauseCrawler(Empty request, StreamObserver<Empty> responseObserver) {
+        try {
+            executionsAdapter.setDesiredPausedState(false);
+            responseObserver.onNext(Empty.newBuilder().build());
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            LOG.error(e.getMessage(), e);
+            Status status = Status.UNKNOWN.withDescription(e.toString());
+            responseObserver.onError(status.asException());
+        }
+    }
+
+    @Override
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    public void status(Empty request, StreamObserver<CrawlerStatus> responseObserver) {
+        try {
+            boolean desiredPausedState = executionsAdapter.getDesiredPausedState();
+            boolean isPaused = executionsAdapter.isPaused();
+            RunStatus runStatus = desiredPausedState && isPaused
+                    ? RunStatus.PAUSED
+                    : desiredPausedState ? RunStatus.PAUSE_REQUESTED : RunStatus.RUNNING;
+            responseObserver.onNext(CrawlerStatus.newBuilder().setRunStatus(runStatus).build());
+            responseObserver.onCompleted();
+        } catch (Exception e) {
+            LOG.error(e.getMessage(), e);
+            Status status = Status.UNKNOWN.withDescription(e.toString());
+            responseObserver.onError(status.asException());
+        }
+    }
 }
