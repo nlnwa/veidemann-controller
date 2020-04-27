@@ -54,15 +54,15 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT})
     public void getConfigObject(ConfigRef request, StreamObserver<ConfigObject> responseObserver) {
         handleGet(() -> db.getConfigObject(request), responseObserver);
     }
 
     @Override
     @Authorisations({
-            @AllowedRoles(value = {Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
-            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+            @AllowedRoles(value = {Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping}),
     })
     public void listConfigObjects(ListRequest request, StreamObserver<ConfigObject> responseObserver) {
         new Thread(new Runnable() {
@@ -83,8 +83,8 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
 
     @Override
     @Authorisations({
-            @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
-            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+            @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT}),
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping}),
     })
     public void countConfigObjects(ListRequest request, StreamObserver<ListCountResponse> responseObserver) {
         handleGet(() -> db.countConfigObjects(request), responseObserver);
@@ -93,7 +93,9 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     @Override
     @Authorisations({
             @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
-            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping}),
+            @AllowedRoles(value = {Role.CONSULTANT, Role.CURATOR, Role.OPERATOR, Role.ADMIN},
+                           kind = {Kind.seed, Kind.crawlEntity})
     })
     public void saveConfigObject(ConfigObject request, StreamObserver<ConfigObject> responseObserver) {
         try {
@@ -117,7 +119,9 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     @Override
     @Authorisations({
             @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
-            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
+            @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping}),
+            @AllowedRoles(value = {Role.ADMIN, Role.CURATOR, Role.OPERATOR, Role.CONSULTANT},
+                           kind = {Kind.crawlEntity, Kind.seed})
     })
     public void updateConfigObjects(UpdateRequest request, StreamObserver<UpdateResponse> responseObserver) {
         try {
@@ -148,7 +152,7 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
 
     @Override
     @Authorisations({
-            @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
+            @AllowedRoles({Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT}),
             @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping})
     })
     public void getLabelKeys(GetLabelKeysRequest request, StreamObserver<LabelKeysResponse> responseObserver) {
