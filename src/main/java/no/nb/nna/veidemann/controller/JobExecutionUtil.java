@@ -1,10 +1,17 @@
 package no.nb.nna.veidemann.controller;
 
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.ListRequest;
+import no.nb.nna.veidemann.api.controller.v1.CrawlerStatus;
+import no.nb.nna.veidemann.api.frontier.v1.CountResponse;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionId;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlHostGroup;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
 import no.nb.nna.veidemann.api.report.v1.CrawlExecutionsListRequest;
 import no.nb.nna.veidemann.commons.db.ChangeFeed;
@@ -129,6 +136,51 @@ public class JobExecutionUtil {
             LOG.info("{} seeds for job '{}' started, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
         });
     }
+
+    public static void queueCountAndBusyChgCount(FutureCallback<CrawlerStatus.Builder> callback) {
+        String type = "url";
+        FrontierClient frontierClient = frontierClients.get(type);
+
+        if (frontierClient != null) {
+            ListenableFuture<CountResponse> queueCount = frontierClient.queueCountTotal();
+            ListenableFuture<CountResponse> chgCount = frontierClient.busyCrawlHostGroupCount();
+            ListenableFuture<CrawlerStatus.Builder> queueAndChgCount = Futures.whenAllSucceed(queueCount, chgCount)
+                    .call(
+                            () -> CrawlerStatus.newBuilder()
+                                    .setBusyCrawlHostGroupCount(Futures.getDone(chgCount).getCount())
+                                    .setQueueSize(Futures.getDone(queueCount).getCount()),
+                            exe);
+            Futures.addCallback(queueAndChgCount, callback, exe);
+        } else {
+            LOG.warn("No frontier defined for seed type {}", type);
+            callback.onFailure(new IllegalArgumentException("No frontier defined for seed type " + type));
+        }
+    }
+
+    public static void queueCountForCrawlExecution(CrawlExecutionId crawlExecutionId, FutureCallback<CountResponse> callback) {
+        String type = "url";
+        FrontierClient frontierClient = frontierClients.get(type);
+
+        if (frontierClient != null) {
+            frontierClient.queueCountForCrawlExecution(crawlExecutionId, callback, exe);
+        } else {
+            LOG.warn("No frontier defined for seed type {}", type);
+            callback.onFailure(new IllegalArgumentException("No frontier defined for seed type " + type));
+        }
+    }
+
+    public static void queueCountForCrawlHostGroup(CrawlHostGroup crawlHostGroup, FutureCallback<CountResponse> callback) {
+        String type = "url";
+        FrontierClient frontierClient = frontierClients.get(type);
+
+        if (frontierClient != null) {
+            frontierClient.queueCountForCrawlHostGroup(crawlHostGroup, callback, exe);
+        } else {
+            LOG.warn("No frontier defined for seed type {}", type);
+            callback.onFailure(new IllegalArgumentException("No frontier defined for seed type " + type));
+        }
+    }
+
 
     @FunctionalInterface
     public interface CheckedSupplier<T, E extends Exception> {

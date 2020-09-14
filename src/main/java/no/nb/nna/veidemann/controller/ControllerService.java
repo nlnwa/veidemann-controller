@@ -15,6 +15,7 @@
  */
 package no.nb.nna.veidemann.controller;
 
+import com.google.common.util.concurrent.FutureCallback;
 import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
@@ -23,14 +24,18 @@ import no.nb.nna.veidemann.api.config.v1.ConfigRef;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.Role;
 import no.nb.nna.veidemann.api.controller.v1.ControllerGrpc;
+import no.nb.nna.veidemann.api.controller.v1.CrawlerStatus;
+import no.nb.nna.veidemann.api.controller.v1.CrawlerStatus.Builder;
 import no.nb.nna.veidemann.api.controller.v1.ExecutionId;
 import no.nb.nna.veidemann.api.controller.v1.OpenIdConnectIssuerReply;
 import no.nb.nna.veidemann.api.controller.v1.RoleList;
 import no.nb.nna.veidemann.api.controller.v1.RunCrawlReply;
 import no.nb.nna.veidemann.api.controller.v1.RunCrawlRequest;
-import no.nb.nna.veidemann.api.controller.v1.CrawlerStatus;
 import no.nb.nna.veidemann.api.controller.v1.RunStatus;
+import no.nb.nna.veidemann.api.frontier.v1.CountResponse;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionId;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionStatus;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlHostGroup;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus.State;
 import no.nb.nna.veidemann.api.report.v1.JobExecutionsListRequest;
@@ -41,6 +46,7 @@ import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.controller.settings.Settings;
+import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -218,16 +224,68 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     public void status(Empty request, StreamObserver<CrawlerStatus> responseObserver) {
         try {
             boolean desiredPausedState = executionsAdapter.getDesiredPausedState();
-            boolean isPaused = executionsAdapter.isPaused();
-            RunStatus runStatus = desiredPausedState && isPaused
-                    ? RunStatus.PAUSED
-                    : desiredPausedState ? RunStatus.PAUSE_REQUESTED : RunStatus.RUNNING;
-            responseObserver.onNext(CrawlerStatus.newBuilder().setRunStatus(runStatus).build());
-            responseObserver.onCompleted();
+            JobExecutionUtil.queueCountAndBusyChgCount(new FutureCallback<Builder>() {
+                @Override
+                public void onSuccess(@Nullable Builder result) {
+                    boolean isPaused = result.getBusyCrawlHostGroupCount() == 0;
+
+                    RunStatus runStatus = desiredPausedState && isPaused
+                            ? RunStatus.PAUSED
+                            : desiredPausedState ? RunStatus.PAUSE_REQUESTED : RunStatus.RUNNING;
+
+                    responseObserver.onNext(result
+                            .setRunStatus(runStatus)
+                            .build());
+                    responseObserver.onCompleted();
+                }
+
+                @Override
+                public void onFailure(Throwable t) {
+                    LOG.error(t.getMessage(), t);
+                    Status status = Status.UNKNOWN.withDescription(t.toString());
+                    responseObserver.onError(status.asException());
+                }
+            });
         } catch (Exception e) {
             LOG.error(e.getMessage(), e);
             Status status = Status.UNKNOWN.withDescription(e.toString());
             responseObserver.onError(status.asException());
         }
+    }
+
+    @Override
+    public void queueCountForCrawlExecution(CrawlExecutionId request, StreamObserver<CountResponse> responseObserver) {
+        JobExecutionUtil.queueCountForCrawlExecution(request, new FutureCallback<CountResponse>() {
+            @Override
+            public void onSuccess(@Nullable CountResponse result) {
+                responseObserver.onNext(result);
+                responseObserver.onCompleted();
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                LOG.error(t.getMessage(), t);
+                Status status = Status.UNKNOWN.withDescription(t.toString());
+                responseObserver.onError(status.asException());
+            }
+        });
+    }
+
+    @Override
+    public void queueCountForCrawlHostGroup(CrawlHostGroup request, StreamObserver<CountResponse> responseObserver) {
+        JobExecutionUtil.queueCountForCrawlHostGroup(request, new FutureCallback<CountResponse>() {
+            @Override
+            public void onSuccess(@Nullable CountResponse result) {
+                responseObserver.onNext(result);
+                responseObserver.onCompleted();
+            }
+
+            @Override
+            public void onFailure(Throwable t) {
+                LOG.error(t.getMessage(), t);
+                Status status = Status.UNKNOWN.withDescription(t.toString());
+                responseObserver.onError(status.asException());
+            }
+        });
     }
 }
