@@ -15,22 +15,30 @@
  */
 package no.nb.nna.veidemann.controller;
 
+import com.google.common.util.concurrent.FutureCallback;
+import com.google.common.util.concurrent.Futures;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.protobuf.Empty;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.opentracing.contrib.ClientTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
+import no.nb.nna.veidemann.api.frontier.v1.CountResponse;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionId;
+import no.nb.nna.veidemann.api.frontier.v1.CrawlHostGroup;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlSeedRequest;
 import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc;
 import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc.FrontierBlockingStub;
+import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc.FrontierFutureStub;
 import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc.FrontierStub;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
 import no.nb.nna.veidemann.commons.client.GrpcUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -46,6 +54,8 @@ public class FrontierClient implements AutoCloseable {
 
     private final FrontierStub asyncStub;
 
+    private final FrontierFutureStub futureStub;
+
     public FrontierClient(final String host, final int port, String supportedSeedType) {
         this(ManagedChannelBuilder.forAddress(host, port).usePlaintext(), supportedSeedType);
         LOG.info("Frontier client pointing to " + host + ":" + port);
@@ -57,6 +67,7 @@ public class FrontierClient implements AutoCloseable {
         channel = channelBuilder.intercept(tracingInterceptor).build();
         blockingStub = FrontierGrpc.newBlockingStub(channel);
         asyncStub = FrontierGrpc.newStub(channel);
+        futureStub = FrontierGrpc.newFutureStub(channel);
         JobExecutionUtil.addFrontierClient(supportedSeedType, this);
     }
 
@@ -72,6 +83,24 @@ public class FrontierClient implements AutoCloseable {
             LOG.error("RPC failed: " + ex.getStatus(), ex);
             throw ex;
         }
+    }
+
+    public ListenableFuture<CountResponse> busyCrawlHostGroupCount() {
+        return futureStub.busyCrawlHostGroupCount(Empty.getDefaultInstance());
+    }
+
+    public ListenableFuture<CountResponse> queueCountTotal() {
+        return futureStub.queueCountTotal(Empty.getDefaultInstance());
+    }
+
+    public void queueCountForCrawlExecution(CrawlExecutionId crawlExecutionId, FutureCallback<CountResponse> callback, Executor executor) {
+        ListenableFuture<CountResponse> future = futureStub.queueCountForCrawlExecution(crawlExecutionId);
+        Futures.addCallback(future, callback, executor);
+    }
+
+    public void queueCountForCrawlHostGroup(CrawlHostGroup crawlHostGroup, FutureCallback<CountResponse> callback, Executor executor) {
+        ListenableFuture<CountResponse> future = futureStub.queueCountForCrawlHostGroup(crawlHostGroup);
+        Futures.addCallback(future, callback, executor);
     }
 
     @Override
