@@ -203,7 +203,7 @@ public class ControllerServiceTest {
         }
 
         public ControllerApiServerMock(Settings settings, IdTokenValidator idValidator, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper) {
-            super(settings, serverBuilder, userRoleMapper);
+            super(settings, serverBuilder, userRoleMapper, null);
             this.idValidator = idValidator;
         }
 

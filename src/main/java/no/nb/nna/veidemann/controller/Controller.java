@@ -25,6 +25,7 @@ import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.opentracing.TracerFactory;
 import no.nb.nna.veidemann.controller.scheduler.CrawlJobScheduler;
+import no.nb.nna.veidemann.controller.scheduler.JobTimeoutWorker;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,19 +71,13 @@ public class Controller {
         try (DbService db = DbService.configure(SETTINGS);
              FrontierClient urlFrontierClient = new FrontierClient(SETTINGS.getFrontierHost(), SETTINGS
                      .getFrontierPort(), "url");
-
-             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper);
-
-             CrawlJobScheduler scheduler = new CrawlJobScheduler()) {
+             JobTimeoutWorker jobTimeoutWorker = new JobTimeoutWorker();
+             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper, jobTimeoutWorker);
+             CrawlJobScheduler scheduler = new CrawlJobScheduler(jobTimeoutWorker)) {
 
             registerShutdownHook();
-
             scheduler.start();
-
             apiServer.start();
-
-
-
             LOG.info("Veidemann Controller (v. {}) started", Controller.class.getPackage().getImplementationVersion());
 
             try {

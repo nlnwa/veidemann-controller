@@ -43,9 +43,11 @@ public class CrawlJobCollector implements TaskCollector {
     private static final Logger LOG = LoggerFactory.getLogger(CrawlJobCollector.class);
 
     final ListRequest listRequest;
+    private final JobTimeoutWorker jobTimeoutWorker;
 
-    public CrawlJobCollector() {
+    public CrawlJobCollector(JobTimeoutWorker jobTimeoutWorker) {
         this.listRequest = ListRequest.newBuilder().setKind(Kind.crawlJob).build();
+        this.jobTimeoutWorker = jobTimeoutWorker;
     }
 
     @Override
@@ -86,7 +88,7 @@ public class CrawlJobCollector implements TaskCollector {
                             }
 
                             SchedulingPattern pattern = new SchedulingPattern(csc.getCronExpression());
-                            Task task = new ScheduledCrawlJob(job);
+                            Task task = new ScheduledCrawlJob(job, jobTimeoutWorker);
                             tasks.add(pattern, task);
                         }
                     }
