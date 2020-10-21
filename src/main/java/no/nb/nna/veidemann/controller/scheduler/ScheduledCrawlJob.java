@@ -39,9 +39,11 @@ public class ScheduledCrawlJob extends Task {
     private static final Logger LOG = LoggerFactory.getLogger(ScheduledCrawlJob.class);
 
     final ConfigObject job;
+    private final JobTimeoutWorker jobTimeoutWorker;
 
-    public ScheduledCrawlJob(ConfigObject job) {
+    public ScheduledCrawlJob(ConfigObject job, JobTimeoutWorker jobTimeoutWorker) {
         this.job = job;
+        this.jobTimeoutWorker = jobTimeoutWorker;
     }
 
     @Override
@@ -58,6 +60,12 @@ public class ScheduledCrawlJob extends Task {
             if (it.hasNext()) {
                 JobExecutionStatus jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
                         .createJobExecutionStatus(job.getId());
+
+                // Add job to timeout timer
+                if (job.getCrawlJob().hasLimits()) {
+                    long maxDurationS = job.getCrawlJob().getLimits().getMaxDurationS();
+                    jobTimeoutWorker.addJobExecution(jobExecutionStatus.getId(), maxDurationS);
+                }
 
                 it.forEachRemaining(seed -> crawlSeed(job, seed, jobExecutionStatus, false));
 

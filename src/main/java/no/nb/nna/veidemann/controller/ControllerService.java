@@ -45,6 +45,7 @@ import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
+import no.nb.nna.veidemann.controller.scheduler.JobTimeoutWorker;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -68,9 +69,11 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     private final ExecutionsAdapter executionsAdapter;
 
     private final Settings settings;
+    private final JobTimeoutWorker jobTimeoutWorker;
 
-    public ControllerService(Settings settings) {
+    public ControllerService(Settings settings, JobTimeoutWorker jobTimeoutWorker) {
         this.settings = settings;
+        this.jobTimeoutWorker = jobTimeoutWorker;
         this.db = DbService.getInstance().getConfigAdapter();
         this.executionsAdapter = DbService.getInstance().getExecutionsAdapter();
     }
@@ -103,6 +106,12 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
                 jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
                         .createJobExecutionStatus(job.getId());
                 LOG.info("Creating new job execution '{}'", jobExecutionStatus.getId());
+
+                // Add job to timeout timer
+                if (job.getCrawlJob().hasLimits()) {
+                    long maxDurationS = job.getCrawlJob().getLimits().getMaxDurationS();
+                    jobTimeoutWorker.addJobExecution(jobExecutionStatus.getId(), maxDurationS);
+                }
             } else {
                 jobExecutionStatus = runningJobs.get(0);
                 addToRunningJob = true;
@@ -134,7 +143,8 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     @AllowedRoles({Role.OPERATOR, Role.ADMIN})
     public void abortCrawlExecution(ExecutionId request, StreamObserver<CrawlExecutionStatus> responseObserver) {
         try {
-            CrawlExecutionStatus status = executionsAdapter.setCrawlExecutionStateAborted(request.getId());
+            CrawlExecutionStatus status = executionsAdapter.setCrawlExecutionStateAborted(
+                    request.getId(), CrawlExecutionStatus.State.ABORTED_MANUAL);
 
             responseObserver.onNext(status);
             responseObserver.onCompleted();
