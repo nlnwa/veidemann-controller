@@ -22,6 +22,8 @@ import no.nb.nna.veidemann.commons.util.ApiTools;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
@@ -69,7 +71,8 @@ public class JobExecutionUtil {
         }
     }
 
-    public static boolean crawlSeed(ConfigObject job, ConfigObject seed, JobExecutionStatus jobExecutionStatus, boolean addToRunningJob) {
+    public static boolean crawlSeed(ConfigObject job, ConfigObject seed, JobExecutionStatus jobExecutionStatus,
+                                    OffsetDateTime timeout, boolean addToRunningJob) {
         if (!seed.getSeed().getDisabled()) {
 
             if (addToRunningJob) {
@@ -100,7 +103,7 @@ public class JobExecutionUtil {
 
             if (frontierClient != null) {
                 exe.submit(() -> {
-                    frontierClient.crawlSeed(job, seed, jobExecutionStatus);
+                    frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout);
                 });
             } else {
                 LOG.warn("No frontier defined for seed type {}", type);
@@ -112,7 +115,8 @@ public class JobExecutionUtil {
         return false;
     }
 
-    public static void submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus, boolean addToRunningJob) {
+    public static void submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus, OffsetDateTime timeout,
+                                   boolean addToRunningJob) {
         ConfigAdapter db = DbService.getInstance().getConfigAdapter();
 
         ListRequest.Builder seedRequest = ListRequest.newBuilder().setKind(Kind.seed);
@@ -124,7 +128,7 @@ public class JobExecutionUtil {
             AtomicLong rejected = new AtomicLong(0L);
             try (ChangeFeed<ConfigObject> seeds = db.listConfigObjects(seedRequest.build())) {
                 seeds.stream().forEach(s -> {
-                    if (crawlSeed(job, s, jobExecutionStatus, addToRunningJob)) {
+                    if (crawlSeed(job, s, jobExecutionStatus, timeout, addToRunningJob)) {
                         count.incrementAndGet();
                     } else {
                         rejected.incrementAndGet();
@@ -181,6 +185,16 @@ public class JobExecutionUtil {
         }
     }
 
+    public static OffsetDateTime calculateTimeout(ConfigObject job) {
+        OffsetDateTime timeout = null;
+        if (job.getCrawlJob().hasLimits()) {
+            long maxDurationS = job.getCrawlJob().getLimits().getMaxDurationS();
+            if (maxDurationS > 0) {
+                timeout = OffsetDateTime.now().plus(maxDurationS, ChronoUnit.SECONDS);
+            }
+        }
+        return timeout;
+    }
 
     @FunctionalInterface
     public interface CheckedSupplier<T, E extends Exception> {

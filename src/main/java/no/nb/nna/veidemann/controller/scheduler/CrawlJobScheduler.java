@@ -23,15 +23,13 @@ import it.sauronsoftware.cron4j.Scheduler;
 public class CrawlJobScheduler implements AutoCloseable {
 
     Scheduler scheduler;
-    private final JobTimeoutWorker jobTimeoutWorker;
 
-    public CrawlJobScheduler(JobTimeoutWorker jobTimeoutWorker) {
-        this.jobTimeoutWorker = jobTimeoutWorker;
+    public CrawlJobScheduler() {
     }
 
     public CrawlJobScheduler start() {
         scheduler = new Scheduler();
-        scheduler.addTaskCollector(new CrawlJobCollector(jobTimeoutWorker));
+        scheduler.addTaskCollector(new CrawlJobCollector());
         scheduler.start();
         return this;
     }

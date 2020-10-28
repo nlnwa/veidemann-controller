@@ -35,9 +35,11 @@ import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc.FrontierFutureStub;
 import no.nb.nna.veidemann.api.frontier.v1.FrontierGrpc.FrontierStub;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
 import no.nb.nna.veidemann.commons.client.GrpcUtil;
+import no.nb.nna.veidemann.db.ProtoUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.OffsetDateTime;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
@@ -71,14 +73,26 @@ public class FrontierClient implements AutoCloseable {
         JobExecutionUtil.addFrontierClient(supportedSeedType, this);
     }
 
-    public CrawlExecutionId crawlSeed(ConfigObject crawlJob, ConfigObject seed, JobExecutionStatus jobExecution) {
+    /**
+     * Request Frontier to craw a Seed.
+     *
+     * @param crawlJob the crawl job configuration
+     * @param seed the seed to crawl
+     * @param jobExecution the jobExecution this crawl is part of
+     * @param timeout timestamp for when this crawl times out. Might be null for no timeout
+     * @return the id of the newly created crawl execution
+     */
+    public CrawlExecutionId crawlSeed(ConfigObject crawlJob, ConfigObject seed, JobExecutionStatus jobExecution,
+                                      OffsetDateTime timeout) {
         try {
-            CrawlSeedRequest request = CrawlSeedRequest.newBuilder()
+            CrawlSeedRequest.Builder request = CrawlSeedRequest.newBuilder()
                     .setJob(crawlJob)
                     .setSeed(seed)
-                    .setJobExecutionId(jobExecution.getId())
-                    .build();
-            return GrpcUtil.forkedCall(() -> blockingStub.crawlSeed(request));
+                    .setJobExecutionId(jobExecution.getId());
+            if (timeout != null) {
+                request.setTimeout(ProtoUtils.odtToTs(timeout));
+            }
+            return GrpcUtil.forkedCall(() -> blockingStub.crawlSeed(request.build()));
         } catch (StatusRuntimeException ex) {
             LOG.error("RPC failed: " + ex.getStatus(), ex);
             throw ex;

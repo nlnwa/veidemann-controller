@@ -27,8 +27,11 @@ import no.nb.nna.veidemann.commons.db.DbService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Iterator;
 
+import static no.nb.nna.veidemann.controller.JobExecutionUtil.calculateTimeout;
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
 
 /**
@@ -39,11 +42,9 @@ public class ScheduledCrawlJob extends Task {
     private static final Logger LOG = LoggerFactory.getLogger(ScheduledCrawlJob.class);
 
     final ConfigObject job;
-    private final JobTimeoutWorker jobTimeoutWorker;
 
-    public ScheduledCrawlJob(ConfigObject job, JobTimeoutWorker jobTimeoutWorker) {
+    public ScheduledCrawlJob(ConfigObject job) {
         this.job = job;
-        this.jobTimeoutWorker = jobTimeoutWorker;
     }
 
     @Override
@@ -61,13 +62,9 @@ public class ScheduledCrawlJob extends Task {
                 JobExecutionStatus jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
                         .createJobExecutionStatus(job.getId());
 
-                // Add job to timeout timer
-                if (job.getCrawlJob().hasLimits()) {
-                    long maxDurationS = job.getCrawlJob().getLimits().getMaxDurationS();
-                    jobTimeoutWorker.addJobExecution(jobExecutionStatus.getId(), maxDurationS);
-                }
+                OffsetDateTime timeout = calculateTimeout(job);
 
-                it.forEachRemaining(seed -> crawlSeed(job, seed, jobExecutionStatus, false));
+                it.forEachRemaining(seed -> crawlSeed(job, seed, jobExecutionStatus, timeout, false));
 
                 LOG.info("All seeds for job '{}' started", job.getMeta().getName());
             } else {

@@ -32,7 +32,6 @@ import no.nb.nna.veidemann.commons.auth.IdTokenAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.IdTokenValidator;
 import no.nb.nna.veidemann.commons.auth.NoopAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.UserRoleMapper;
-import no.nb.nna.veidemann.controller.scheduler.JobTimeoutWorker;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,18 +56,16 @@ public class ControllerApiServer implements AutoCloseable {
     private Server server;
     private final ExecutorService threadPool;
     final UserRoleMapper userRoleMapper;
-    private final JobTimeoutWorker jobTimeoutWorker;
     final Settings settings;
 
-    public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper, JobTimeoutWorker jobTimeoutWorker) {
-        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper, jobTimeoutWorker);
+    public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper) {
+        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper);
     }
 
-    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper, JobTimeoutWorker jobTimeoutWorker) {
+    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper) {
         this.settings = settings;
         this.serverBuilder = serverBuilder;
         this.userRoleMapper = userRoleMapper;
-        this.jobTimeoutWorker = jobTimeoutWorker;
         threadPool = Executors.newCachedThreadPool();
         serverBuilder.executor(threadPool);
     }
@@ -100,7 +97,7 @@ public class ControllerApiServer implements AutoCloseable {
 
         server = serverBuilder
                 .addService(createService(new ConfigService(), interceptors))
-                .addService(createService(new ControllerService(settings, jobTimeoutWorker), interceptors))
+                .addService(createService(new ControllerService(settings), interceptors))
                 .addService(createService(new ReportService(), interceptors))
                 .addService(createService(new EventService(), interceptors))
                 .build();
