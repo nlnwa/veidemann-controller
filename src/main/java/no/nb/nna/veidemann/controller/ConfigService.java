@@ -160,7 +160,7 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
     public void saveLogConfig(LogLevels request, StreamObserver<LogLevels> responseObserver) {
         try {
             responseObserver.onNext(db.saveLogConfig(request));
