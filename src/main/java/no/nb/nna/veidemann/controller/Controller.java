@@ -70,19 +70,12 @@ public class Controller {
         try (DbService db = DbService.configure(SETTINGS);
              FrontierClient urlFrontierClient = new FrontierClient(SETTINGS.getFrontierHost(), SETTINGS
                      .getFrontierPort(), "url");
-
              ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper);
-
              CrawlJobScheduler scheduler = new CrawlJobScheduler()) {
 
             registerShutdownHook();
-
             scheduler.start();
-
             apiServer.start();
-
-
-
             LOG.info("Veidemann Controller (v. {}) started", Controller.class.getPackage().getImplementationVersion());
 
             try {

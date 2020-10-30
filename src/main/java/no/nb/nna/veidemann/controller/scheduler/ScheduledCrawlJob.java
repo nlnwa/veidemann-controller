@@ -27,8 +27,11 @@ import no.nb.nna.veidemann.commons.db.DbService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Iterator;
 
+import static no.nb.nna.veidemann.controller.JobExecutionUtil.calculateTimeout;
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
 
 /**
@@ -59,7 +62,9 @@ public class ScheduledCrawlJob extends Task {
                 JobExecutionStatus jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
                         .createJobExecutionStatus(job.getId());
 
-                it.forEachRemaining(seed -> crawlSeed(job, seed, jobExecutionStatus, false));
+                OffsetDateTime timeout = calculateTimeout(job);
+
+                it.forEachRemaining(seed -> crawlSeed(job, seed, jobExecutionStatus, timeout, false));
 
                 LOG.info("All seeds for job '{}' started", job.getMeta().getName());
             } else {

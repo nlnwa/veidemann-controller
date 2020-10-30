@@ -50,12 +50,13 @@ import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.OffsetDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
 import java.util.stream.Collectors;
 
-import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
-import static no.nb.nna.veidemann.controller.JobExecutionUtil.submitSeeds;
+import static no.nb.nna.veidemann.controller.JobExecutionUtil.*;
 
 /**
  *
@@ -114,14 +115,16 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
             responseObserver.onNext(reply);
             responseObserver.onCompleted();
 
+            OffsetDateTime timeout = calculateTimeout(job);
+
             if (!request.getSeedId().isEmpty()) {
                 ConfigObject seed = db.getConfigObject(ConfigRef.newBuilder()
                         .setKind(Kind.seed)
                         .setId(request.getSeedId())
                         .build());
-                crawlSeed(job, seed, jobExecutionStatus, addToRunningJob);
+                crawlSeed(job, seed, jobExecutionStatus, timeout, addToRunningJob);
             } else {
-                submitSeeds(job, jobExecutionStatus, addToRunningJob);
+                submitSeeds(job, jobExecutionStatus, timeout, addToRunningJob);
             }
         } catch (Exception ex) {
             LOG.error(ex.getMessage(), ex);
@@ -134,7 +137,8 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     @AllowedRoles({Role.OPERATOR, Role.ADMIN})
     public void abortCrawlExecution(ExecutionId request, StreamObserver<CrawlExecutionStatus> responseObserver) {
         try {
-            CrawlExecutionStatus status = executionsAdapter.setCrawlExecutionStateAborted(request.getId());
+            CrawlExecutionStatus status = executionsAdapter.setCrawlExecutionStateAborted(
+                    request.getId(), CrawlExecutionStatus.State.ABORTED_MANUAL);
 
             responseObserver.onNext(status);
             responseObserver.onCompleted();
