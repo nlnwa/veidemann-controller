@@ -66,7 +66,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT})
     public void listCrawlLogs(CrawlLogListRequest request, StreamObserver<CrawlLog> responseObserver) {
         new Thread(() -> {
             try (ChangeFeed<CrawlLog> c = executionsAdapter.listCrawlLogs(request);) {
@@ -134,7 +134,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN, Role.CURATOR, Role.CONSULTANT})
     public void executeDbQuery(ExecuteDbQueryRequest request, StreamObserver<ExecuteDbQueryReply> respObserver) {
         try {
             ReqlAst qry = QueryEngine.getInstance().parseQuery(request.getQuery());
