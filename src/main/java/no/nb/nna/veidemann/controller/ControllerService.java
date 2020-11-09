@@ -77,7 +77,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.ADMIN, Role.OPERATOR})
     public void runCrawl(RunCrawlRequest request, StreamObserver<RunCrawlReply> responseObserver) {
         try {
             ConfigRef jobRequest = ConfigRef.newBuilder()
@@ -134,7 +134,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN, Role.CURATOR})
     public void abortCrawlExecution(ExecutionId request, StreamObserver<CrawlExecutionStatus> responseObserver) {
         try {
             CrawlExecutionStatus status = executionsAdapter.setCrawlExecutionStateAborted(
@@ -150,7 +150,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN, Role.CURATOR})
     public void abortJobExecution(ExecutionId request, StreamObserver<JobExecutionStatus> responseObserver) {
         try {
             JobExecutionStatus status = executionsAdapter.setJobExecutionStateAborted(request.getId());
@@ -224,7 +224,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.OPERATOR, Role.ADMIN})
+    @AllowedRoles({Role.OPERATOR, Role.ADMIN, Role.CONSULTANT, Role.CURATOR, Role.ANY_USER})
     public void status(Empty request, StreamObserver<CrawlerStatus> responseObserver) {
         try {
             boolean desiredPausedState = executionsAdapter.getDesiredPausedState();
