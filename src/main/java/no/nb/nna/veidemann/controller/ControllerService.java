@@ -19,6 +19,7 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import no.nb.nna.veidemann.api.config.v1.Annotation;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.ConfigRef;
 import no.nb.nna.veidemann.api.config.v1.Kind;
@@ -51,12 +52,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
-import static no.nb.nna.veidemann.controller.JobExecutionUtil.*;
+import static no.nb.nna.veidemann.controller.JobExecutionUtil.calculateTimeout;
+import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
 
 /**
  *
@@ -88,7 +90,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
             ConfigObject job = db.getConfigObject(jobRequest);
             LOG.info("Job '{}' starting", job.getMeta().getName());
 
-            JobExecutionStatus jobExecutionStatus;
+            JobExecutionStatus jobExecutionStatus = null;
             boolean addToRunningJob = false;
 
             ChangeFeed<JobExecutionStatus> runningJobsR = DbService.getInstance().getExecutionsAdapter()
@@ -100,32 +102,32 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
                     .filter(jes -> jes.getJobId().equals(request.getJobId()))
                     .collect(Collectors.toList());
 
-            if (runningJobs.isEmpty()) {
-                jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
-                        .createJobExecutionStatus(job.getId());
-                LOG.info("Creating new job execution '{}'", jobExecutionStatus.getId());
-            } else {
+            if (!runningJobs.isEmpty()) {
                 jobExecutionStatus = runningJobs.get(0);
                 addToRunningJob = true;
                 LOG.info("Adding seeds to running job execution'{}'", jobExecutionStatus.getId());
             }
 
-            RunCrawlReply reply = RunCrawlReply.newBuilder().setJobExecutionId(jobExecutionStatus.getId()).build();
-
-            responseObserver.onNext(reply);
-            responseObserver.onCompleted();
-
             OffsetDateTime timeout = calculateTimeout(job);
 
             if (!request.getSeedId().isEmpty()) {
+                jobExecutionStatus = JobExecutionUtil.createJobExecutionStatusIfNotExist(job, jobExecutionStatus);
                 ConfigObject seed = db.getConfigObject(ConfigRef.newBuilder()
                         .setKind(Kind.seed)
                         .setId(request.getSeedId())
                         .build());
-                crawlSeed(job, seed, jobExecutionStatus, timeout, addToRunningJob);
+                Map<String, Annotation> jobAnnotations = JobExecutionUtil.GetScriptAnnotationsForJob(job);
+                crawlSeed(job, seed, jobExecutionStatus, jobAnnotations, timeout, addToRunningJob);
             } else {
-                submitSeeds(job, jobExecutionStatus, timeout, addToRunningJob);
+                jobExecutionStatus = JobExecutionUtil.submitSeeds(job, jobExecutionStatus, timeout, addToRunningJob);
             }
+
+            RunCrawlReply.Builder reply = RunCrawlReply.newBuilder();
+            if (jobExecutionStatus != null) {
+                reply.setJobExecutionId(jobExecutionStatus.getId());
+            }
+            responseObserver.onNext(reply.build());
+            responseObserver.onCompleted();
         } catch (Exception ex) {
             LOG.error(ex.getMessage(), ex);
             Status status = Status.UNKNOWN.withDescription(ex.toString());

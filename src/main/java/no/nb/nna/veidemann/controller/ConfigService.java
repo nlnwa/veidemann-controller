@@ -19,11 +19,14 @@ package no.nb.nna.veidemann.controller;
 import com.google.protobuf.Empty;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import no.nb.nna.veidemann.api.config.v1.Annotation;
 import no.nb.nna.veidemann.api.config.v1.ConfigGrpc;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.ConfigRef;
 import no.nb.nna.veidemann.api.config.v1.DeleteResponse;
 import no.nb.nna.veidemann.api.config.v1.GetLabelKeysRequest;
+import no.nb.nna.veidemann.api.config.v1.GetScriptAnnotationsRequest;
+import no.nb.nna.veidemann.api.config.v1.GetScriptAnnotationsResponse;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.LabelKeysResponse;
 import no.nb.nna.veidemann.api.config.v1.ListCountResponse;
@@ -37,9 +40,10 @@ import no.nb.nna.veidemann.commons.auth.Authorisations;
 import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
-import no.nb.nna.veidemann.commons.util.CrawlScopes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.handleGet;
 
@@ -95,18 +99,10 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
             @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
             @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping}),
             @AllowedRoles(value = {Role.CONSULTANT, Role.CURATOR, Role.OPERATOR, Role.ADMIN},
-                           kind = {Kind.seed, Kind.crawlEntity})
+                    kind = {Kind.seed, Kind.crawlEntity})
     })
     public void saveConfigObject(ConfigObject request, StreamObserver<ConfigObject> responseObserver) {
         try {
-            // If kind is seed and scope is not set, apply default scope
-            if (request.getKind() == Kind.seed && request.getSeed().getScope().getSurtPrefix().isEmpty()) {
-                String scope = CrawlScopes.generateDomainScope(request.getMeta().getName());
-                ConfigObject.Builder b = request.toBuilder();
-                b.getSeedBuilder().setScope(request.getSeed().getScope().toBuilder().setSurtPrefix(scope)).build();
-                request = b.build();
-            }
-
             responseObserver.onNext(db.saveConfigObject(request));
             responseObserver.onCompleted();
         } catch (Exception ex) {
@@ -121,7 +117,7 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
             @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
             @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping}),
             @AllowedRoles(value = {Role.ADMIN, Role.CURATOR, Role.OPERATOR, Role.CONSULTANT},
-                           kind = {Kind.crawlEntity, Kind.seed})
+                    kind = {Kind.crawlEntity, Kind.seed})
     })
     public void updateConfigObjects(UpdateRequest request, StreamObserver<UpdateResponse> responseObserver) {
         try {
@@ -157,6 +153,33 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     })
     public void getLabelKeys(GetLabelKeysRequest request, StreamObserver<LabelKeysResponse> responseObserver) {
         handleGet(() -> db.getLabelKeys(request), responseObserver);
+    }
+
+    /**
+     * @param request
+     * @param responseObserver
+     */
+    @Override
+    @Authorisations({
+            @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN}),
+    })
+    public void getScriptAnnotations(GetScriptAnnotationsRequest request, StreamObserver<GetScriptAnnotationsResponse> responseObserver) {
+        handleGet(() -> {
+
+            ConfigObject jobConfig = db.getConfigObject(request.getJob());
+            Map<String, Annotation> annotations = JobExecutionUtil.GetScriptAnnotationsForJob(jobConfig);
+
+            if (request.hasSeed()) {
+                ConfigObject seed = db.getConfigObject(request.getSeed());
+                annotations = JobExecutionUtil.GetScriptAnnotationOverridesForSeed(seed, jobConfig, annotations);
+            }
+
+            GetScriptAnnotationsResponse response = GetScriptAnnotationsResponse.newBuilder()
+                    .addAllAnnotation(annotations.values())
+                    .build();
+
+            return response;
+        }, responseObserver);
     }
 
     @Override

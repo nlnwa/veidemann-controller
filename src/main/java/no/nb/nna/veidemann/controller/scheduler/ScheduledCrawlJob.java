@@ -18,21 +18,11 @@ package no.nb.nna.veidemann.controller.scheduler;
 import it.sauronsoftware.cron4j.Task;
 import it.sauronsoftware.cron4j.TaskExecutionContext;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
-import no.nb.nna.veidemann.api.config.v1.Kind;
-import no.nb.nna.veidemann.api.config.v1.ListRequest;
-import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
-import no.nb.nna.veidemann.commons.db.ChangeFeed;
-import no.nb.nna.veidemann.commons.db.DbException;
-import no.nb.nna.veidemann.commons.db.DbService;
+import no.nb.nna.veidemann.controller.JobExecutionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.time.OffsetDateTime;
-import java.time.temporal.ChronoUnit;
-import java.util.Iterator;
-
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.calculateTimeout;
-import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
 
 /**
  *
@@ -51,27 +41,6 @@ public class ScheduledCrawlJob extends Task {
     public void execute(TaskExecutionContext context) throws RuntimeException {
         LOG.debug("Job '{}' starting", job.getMeta().getName());
 
-        ListRequest.Builder seedRequest = ListRequest.newBuilder()
-                .setKind(Kind.seed);
-        seedRequest.getQueryMaskBuilder().addPaths(Kind.seed.name() + ".jobRef");
-        seedRequest.getQueryTemplateBuilder().getSeedBuilder().addJobRefBuilder().setKind(Kind.crawlJob).setId(job.getId());
-
-        try (ChangeFeed<ConfigObject> seeds = DbService.getInstance().getConfigAdapter().listConfigObjects(seedRequest.build())) {
-            Iterator<ConfigObject> it = seeds.stream().iterator();
-            if (it.hasNext()) {
-                JobExecutionStatus jobExecutionStatus = DbService.getInstance().getExecutionsAdapter()
-                        .createJobExecutionStatus(job.getId());
-
-                OffsetDateTime timeout = calculateTimeout(job);
-
-                it.forEachRemaining(seed -> crawlSeed(job, seed, jobExecutionStatus, timeout, false));
-
-                LOG.info("All seeds for job '{}' started", job.getMeta().getName());
-            } else {
-                LOG.debug("No seeds for job '{}'", job.getMeta().getName());
-            }
-        } catch (DbException e) {
-            throw new RuntimeException(e);
-        }
+        JobExecutionUtil.submitSeeds(job, null, calculateTimeout(job), false);
     }
 }
