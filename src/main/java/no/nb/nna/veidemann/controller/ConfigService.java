@@ -53,8 +53,11 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
 
     private final ConfigAdapter db;
 
-    public ConfigService() {
+    private final ScopeServiceClient scopeServiceClient;
+
+    public ConfigService(ScopeServiceClient scopeServiceClient) {
         this.db = DbService.getInstance().getConfigAdapter();
+        this.scopeServiceClient = scopeServiceClient;
     }
 
     @Override
@@ -103,6 +106,16 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     })
     public void saveConfigObject(ConfigObject request, StreamObserver<ConfigObject> responseObserver) {
         try {
+            // If kind is seed, canonicalize uri
+            if (request.getKind() == Kind.seed) {
+                String canonicalizedUri = scopeServiceClient.canonicalize(request.getMeta().getName());
+                if (!canonicalizedUri.equals(request.getMeta().getName())) {
+                    ConfigObject.Builder b = request.toBuilder();
+                    b.getMetaBuilder().setName(canonicalizedUri);
+                    request = b.build();
+                }
+            }
+
             responseObserver.onNext(db.saveConfigObject(request));
             responseObserver.onCompleted();
         } catch (Exception ex) {

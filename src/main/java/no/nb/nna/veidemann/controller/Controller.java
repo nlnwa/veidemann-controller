@@ -70,7 +70,9 @@ public class Controller {
         try (DbService db = DbService.configure(SETTINGS);
              FrontierClient urlFrontierClient = new FrontierClient(SETTINGS.getFrontierHost(), SETTINGS
                      .getFrontierPort(), "url");
-             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper);
+             ScopeServiceClient scopeServiceClient = new ScopeServiceClient(SETTINGS.getScopeserviceHost(), SETTINGS
+                     .getScopeservicePort());
+             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper, scopeServiceClient);
              CrawlJobScheduler scheduler = new CrawlJobScheduler()) {
 
             registerShutdownHook();
