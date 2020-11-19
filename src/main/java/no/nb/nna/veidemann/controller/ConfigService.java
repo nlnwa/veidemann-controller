@@ -173,7 +173,7 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.READONLY, Role.CURATOR, Role.ADMIN})
+    @AllowedRoles({Role.READONLY, Role.OPERATOR, Role.ADMIN})
     public void getLogConfig(Empty request, StreamObserver<LogLevels> responseObserver) {
         try {
             responseObserver.onNext(db.getLogConfig());
