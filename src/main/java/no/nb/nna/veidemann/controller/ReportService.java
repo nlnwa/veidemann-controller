@@ -86,7 +86,7 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN})
+    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT})
     public void listPageLogs(PageLogListRequest request, StreamObserver<PageLog> responseObserver) {
         new Thread(() -> {
             try (ChangeFeed<PageLog> c = executionsAdapter.listPageLogs(request);) {
