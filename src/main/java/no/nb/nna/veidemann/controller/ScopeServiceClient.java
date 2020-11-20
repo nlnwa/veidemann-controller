@@ -22,11 +22,12 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.opentracing.contrib.ClientTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
+import no.nb.nna.veidemann.api.uricanonicalizer.v1.CanonicalizeRequest;
+import no.nb.nna.veidemann.api.uricanonicalizer.v1.CanonicalizeResponse;
 import no.nb.nna.veidemann.api.uricanonicalizer.v1.UriCanonicalizerServiceGrpc;
 import no.nb.nna.veidemann.api.uricanonicalizer.v1.UriCanonicalizerServiceGrpc.UriCanonicalizerServiceBlockingStub;
 import no.nb.nna.veidemann.api.uricanonicalizer.v1.UriCanonicalizerServiceGrpc.UriCanonicalizerServiceFutureStub;
 import no.nb.nna.veidemann.api.uricanonicalizer.v1.UriCanonicalizerServiceGrpc.UriCanonicalizerServiceStub;
-import no.nb.nna.veidemann.api.uricanonicalizer.v1.UriMessage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -62,16 +63,16 @@ public class ScopeServiceClient implements AutoCloseable {
         futureStub = UriCanonicalizerServiceGrpc.newFutureStub(channel);
     }
 
-    public ListenableFuture<UriMessage> canonicalize(UriMessage uri) {
+    public ListenableFuture<CanonicalizeResponse> canonicalize(CanonicalizeRequest uri) {
         return futureStub.canonicalize(uri);
     }
 
     public String canonicalize(String uri) {
-        return blockingStub.canonicalize(UriMessage.newBuilder().setUri(uri).build()).getUri();
+        return blockingStub.canonicalize(CanonicalizeRequest.newBuilder().setUri(uri).build()).getUri().getHref();
     }
 
-    public void canonicalize(UriMessage uri, FutureCallback<UriMessage> callback, Executor executor) {
-        ListenableFuture<UriMessage> future = futureStub.canonicalize(uri);
+    public void canonicalize(CanonicalizeRequest uri, FutureCallback<CanonicalizeResponse> callback, Executor executor) {
+        ListenableFuture<CanonicalizeResponse> future = futureStub.canonicalize(uri);
         Futures.addCallback(future, callback, executor);
     }
 

@@ -246,7 +246,7 @@ public class JobExecutionUtil {
         Map<String, Annotation> annotations = new HashMap<>();
 
         // Get scope script annotations
-        db.getConfigObject(jobConfig.getCrawlJob().getScopeScript()).getMeta().getAnnotationList()
+        db.getConfigObject(jobConfig.getCrawlJob().getScopeScriptRef()).getMeta().getAnnotationList()
                 .forEach(a -> annotations.put(a.getKey(), a));
 
         // Get annotations for referenced browser scripts

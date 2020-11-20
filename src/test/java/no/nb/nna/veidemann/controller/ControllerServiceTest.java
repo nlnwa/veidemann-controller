@@ -172,7 +172,7 @@ public class ControllerServiceTest {
         ConfigObject.Builder jobConfigB = newConfObj(Kind.crawlJob, "job1", ann("scp", "scpvalFromJob"));
         jobConfigB.getCrawlJobBuilder()
                 .setCrawlConfigRef(crawlConfigRef)
-                .setScopeScript(scopescriptRef);
+                .setScopeScriptRef(scopescriptRef);
         ConfigObject jobConfig1 = jobConfigB.build();
         ConfigRef jobConfig1Ref = ApiTools.refForConfig(jobConfig1);
         when(configAdapterMock.getConfigObject(jobConfig1Ref))
@@ -181,7 +181,7 @@ public class ControllerServiceTest {
         jobConfigB = newConfObj(Kind.crawlJob, "job2");
         jobConfigB.getCrawlJobBuilder()
                 .setCrawlConfigRef(crawlConfigRef)
-                .setScopeScript(scopescriptRef);
+                .setScopeScriptRef(scopescriptRef);
         ConfigObject jobConfig2 = jobConfigB.build();
         ConfigRef jobConfig2Ref = ApiTools.refForConfig(jobConfig2);
         when(configAdapterMock.getConfigObject(jobConfig2Ref))
@@ -326,7 +326,7 @@ public class ControllerServiceTest {
                 .isSameAs(coEntity);
     }
 
-    @org.junit.jupiter.api.Test
+    @Test
     void runCrawlWithSeed() throws DbException, InterruptedException {
         Settings settings = new Settings();
         settings.setSkipAuthentication(true);
@@ -356,7 +356,7 @@ public class ControllerServiceTest {
         verify(executionsAdapterMock, times(0)).createJobExecutionStatus("job2");
     }
 
-    @org.junit.jupiter.api.Test
+    @Test
     void runCrawl() throws DbException, InterruptedException {
         Settings settings = new Settings();
         settings.setSkipAuthentication(true);
@@ -393,7 +393,7 @@ public class ControllerServiceTest {
         verify(executionsAdapterMock, times(0)).createJobExecutionStatus("job2");
     }
 
-    @org.junit.jupiter.api.Test
+    @Test
     void runCrawlSeedsMissing() throws DbException, InterruptedException {
         Settings settings = new Settings();
         settings.setSkipAuthentication(true);

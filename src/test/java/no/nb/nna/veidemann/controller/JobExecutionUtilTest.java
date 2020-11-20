@@ -84,7 +84,7 @@ class JobExecutionUtilTest {
             ConfigObject.Builder jobConfig = newConfObj(Kind.crawlJob, "job1", ann("bs1", "bs1val2"));
             jobConfig.getCrawlJobBuilder()
                     .setCrawlConfigRef(crawlConfigRef)
-                    .setScopeScript(scopescriptRef);
+                    .setScopeScriptRef(scopescriptRef);
 
             Annotation expected1 = Annotation.newBuilder().setKey("bs1").setValue("bs1val2").build();
             Annotation expected2 = Annotation.newBuilder().setKey("bs2").setValue("bs2val1").build();
