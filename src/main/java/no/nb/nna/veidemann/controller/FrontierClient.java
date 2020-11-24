@@ -24,7 +24,6 @@ import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
 import io.opentracing.contrib.ClientTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
-import no.nb.nna.veidemann.api.config.v1.Annotation;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.frontier.v1.CountResponse;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionId;
@@ -41,7 +40,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.OffsetDateTime;
-import java.util.Collection;
 import java.util.concurrent.Executor;
 import java.util.concurrent.TimeUnit;
 
@@ -81,18 +79,16 @@ public class FrontierClient implements AutoCloseable {
      * @param crawlJob     the crawl job configuration
      * @param seed         the seed to crawl
      * @param jobExecution the jobExecution this crawl is part of
-     * @param annotations
      * @param timeout      timestamp for when this crawl times out. Might be null for no timeout
      * @return the id of the newly created crawl execution
      */
     public CrawlExecutionId crawlSeed(ConfigObject crawlJob, ConfigObject seed, JobExecutionStatus jobExecution,
-                                      Collection<Annotation> annotations, OffsetDateTime timeout) {
+                                      OffsetDateTime timeout) {
         try {
             CrawlSeedRequest.Builder request = CrawlSeedRequest.newBuilder()
                     .setJob(crawlJob)
                     .setSeed(seed)
-                    .setJobExecutionId(jobExecution.getId())
-                    .addAllAnnotation(annotations);
+                    .setJobExecutionId(jobExecution.getId());
             if (timeout != null) {
                 request.setTimeout(ProtoUtils.odtToTs(timeout));
             }
