@@ -111,7 +111,7 @@ public class JobExecutionUtil {
                 exe.submit(() -> {
                     try {
                         Map<String, Annotation> annotations = JobExecutionUtil.GetScriptAnnotationOverridesForSeed(seed, job, jobAnnotations);
-                        frontierClient.crawlSeed(job, seed, jobExecutionStatus, annotations.values(), timeout);
+                        frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout);
                     } catch (DbException e) {
                         LOG.warn("Could not get annotation overrides for seed '{}'", seed.getId(), e);
                     }
@@ -246,6 +246,9 @@ public class JobExecutionUtil {
         Map<String, Annotation> annotations = new HashMap<>();
 
         // Get scope script annotations
+        if (!jobConfig.getCrawlJob().hasScopeScriptRef()) {
+            throw new IllegalArgumentException("Missing scopescript ref for crawl job " + jobConfig.getId());
+        }
         db.getConfigObject(jobConfig.getCrawlJob().getScopeScriptRef()).getMeta().getAnnotationList()
                 .forEach(a -> annotations.put(a.getKey(), a));
 
