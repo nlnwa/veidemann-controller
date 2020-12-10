@@ -111,16 +111,15 @@ public class ControllerServiceTest {
         FrontierClient frontierClientMock = mock(FrontierClient.class);
         JobExecutionUtil.addFrontierClient("url", frontierClientMock);
         frontierInvocations = new ArrayList<>();
-        when(frontierClientMock.crawlSeed(any(), any(), any(), any(), any()))
+        when(frontierClientMock.crawlSeed(any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     try {
                         CrawlSeedRequest.Builder request = CrawlSeedRequest.newBuilder()
                                 .setJob((ConfigObject) invocation.getArgument(0))
                                 .setSeed((ConfigObject) invocation.getArgument(1))
-                                .setJobExecutionId(((JobExecutionStatus) invocation.getArgument(2)).getId())
-                                .addAllAnnotation(invocation.getArgument(3));
-                        if (invocation.getArgument(4) != null) {
-                            request.setTimeout(ProtoUtils.odtToTs(invocation.getArgument(4)));
+                                .setJobExecutionId(((JobExecutionStatus) invocation.getArgument(2)).getId());
+                        if (invocation.getArgument(3) != null) {
+                            request.setTimeout(ProtoUtils.odtToTs(invocation.getArgument(3)));
                         }
 
                         frontierInvocations.add(request.build());
@@ -345,13 +344,6 @@ public class ControllerServiceTest {
         assertThat(frontierInvocations.get(0).getSeed().getId()).isEqualTo("seed1");
         assertThat(frontierInvocations.get(0).getTimeout()).isInstanceOf(Timestamp.class);
 
-        Annotation expected1 = Annotation.newBuilder().setKey("bs1").setValue("bs1valFromSeed").build();
-        Annotation expected2 = Annotation.newBuilder().setKey("bs2").setValue("bs2valFromScript").build();
-        Annotation expected3 = Annotation.newBuilder().setKey("bs3").setValue("bs3valFromEntity").build();
-        Annotation expected4 = Annotation.newBuilder().setKey("scp").setValue("scpvalFromJob").build();
-        assertThat(frontierInvocations.get(0).getAnnotationList())
-                .containsExactlyInAnyOrder(expected1, expected2, expected3, expected4);
-
         verify(executionsAdapterMock, times(1)).createJobExecutionStatus("job1");
         verify(executionsAdapterMock, times(0)).createJobExecutionStatus("job2");
     }
@@ -377,17 +369,6 @@ public class ControllerServiceTest {
         assertThat(frontierInvocations.get(1).getJob().getId()).isEqualTo("job1");
         assertThat(frontierInvocations.get(1).getSeed().getId()).isEqualTo("seed2");
         assertThat(frontierInvocations.get(1).getTimeout()).isInstanceOf(Timestamp.class);
-
-        Annotation expected1 = Annotation.newBuilder().setKey("bs1").setValue("bs1valFromSeed").build();
-        Annotation expected2 = Annotation.newBuilder().setKey("bs2").setValue("bs2valFromScript").build();
-        Annotation expected3 = Annotation.newBuilder().setKey("bs3").setValue("bs3valFromEntity").build();
-        Annotation expected4 = Annotation.newBuilder().setKey("scp").setValue("scpvalFromJob").build();
-        Annotation expected5 = Annotation.newBuilder().setKey("bs2").setValue("bs2valFromSeed").build();
-
-        assertThat(frontierInvocations.get(0).getAnnotationList())
-                .containsExactlyInAnyOrder(expected1, expected2, expected3, expected4);
-        assertThat(frontierInvocations.get(1).getAnnotationList())
-                .containsExactlyInAnyOrder(expected1, expected3, expected4, expected5);
 
         verify(executionsAdapterMock, times(1)).createJobExecutionStatus("job1");
         verify(executionsAdapterMock, times(0)).createJobExecutionStatus("job2");
