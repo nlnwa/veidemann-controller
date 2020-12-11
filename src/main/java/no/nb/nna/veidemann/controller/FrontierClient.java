@@ -76,10 +76,10 @@ public class FrontierClient implements AutoCloseable {
     /**
      * Request Frontier to craw a Seed.
      *
-     * @param crawlJob the crawl job configuration
-     * @param seed the seed to crawl
+     * @param crawlJob     the crawl job configuration
+     * @param seed         the seed to crawl
      * @param jobExecution the jobExecution this crawl is part of
-     * @param timeout timestamp for when this crawl times out. Might be null for no timeout
+     * @param timeout      timestamp for when this crawl times out. Might be null for no timeout
      * @return the id of the newly created crawl execution
      */
     public CrawlExecutionId crawlSeed(ConfigObject crawlJob, ConfigObject seed, JobExecutionStatus jobExecution,

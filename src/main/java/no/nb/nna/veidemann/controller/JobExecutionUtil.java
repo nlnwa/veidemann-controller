@@ -3,8 +3,10 @@ package no.nb.nna.veidemann.controller;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import no.nb.nna.veidemann.api.config.v1.Annotation;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.ListRequest;
@@ -24,7 +26,11 @@ import org.slf4j.LoggerFactory;
 
 import java.time.OffsetDateTime;
 import java.time.temporal.ChronoUnit;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -54,7 +60,7 @@ public class JobExecutionUtil {
      * @param responseSupplier the supplier which result is checked for null
      * @param responseObserver the observer to send the object to
      */
-    public static <T> void handleGet(CheckedSupplier<T, DbException> responseSupplier, StreamObserver responseObserver) {
+    public static <T> void handleGet(CheckedSupplier<T, DbException> responseSupplier, StreamObserver<T> responseObserver) {
         try {
             T response = responseSupplier.get();
             if (response == null) {
@@ -72,7 +78,7 @@ public class JobExecutionUtil {
     }
 
     public static boolean crawlSeed(ConfigObject job, ConfigObject seed, JobExecutionStatus jobExecutionStatus,
-                                    OffsetDateTime timeout, boolean addToRunningJob) {
+                                    Map<String, Annotation> jobAnnotations, OffsetDateTime timeout, boolean addToRunningJob) {
         if (!seed.getSeed().getDisabled()) {
 
             if (addToRunningJob) {
@@ -103,42 +109,77 @@ public class JobExecutionUtil {
 
             if (frontierClient != null) {
                 exe.submit(() -> {
-                    frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout);
+                    try {
+                        Map<String, Annotation> annotations = JobExecutionUtil.GetScriptAnnotationOverridesForSeed(seed, job, jobAnnotations);
+                        frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout);
+                    } catch (DbException e) {
+                        LOG.warn("Could not get annotation overrides for seed '{}'", seed.getId(), e);
+                    }
                 });
             } else {
                 LOG.warn("No frontier defined for seed type {}", type);
                 return false;
             }
+
             return true;
         }
         LOG.debug("Seed '{}' is disabled", seed.getMeta().getName());
         return false;
     }
 
-    public static void submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus, OffsetDateTime timeout,
-                                   boolean addToRunningJob) {
-        ConfigAdapter db = DbService.getInstance().getConfigAdapter();
+    public static JobExecutionStatus submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus, OffsetDateTime timeout,
+                                                 boolean addToRunningJob) {
+        SettableFuture<JobExecutionStatus> jesFuture = SettableFuture.create();
 
-        ListRequest.Builder seedRequest = ListRequest.newBuilder().setKind(Kind.seed);
+        ListRequest.Builder seedRequest = ListRequest.newBuilder()
+                .setKind(Kind.seed);
         seedRequest.getQueryMaskBuilder().addPaths(Kind.seed.name() + ".jobRef");
         seedRequest.getQueryTemplateBuilder().getSeedBuilder().addJobRefBuilder().setKind(Kind.crawlJob).setId(job.getId());
 
         exe.submit(() -> {
             AtomicLong count = new AtomicLong(0L);
             AtomicLong rejected = new AtomicLong(0L);
-            try (ChangeFeed<ConfigObject> seeds = db.listConfigObjects(seedRequest.build())) {
-                seeds.stream().forEach(s -> {
-                    if (crawlSeed(job, s, jobExecutionStatus, timeout, addToRunningJob)) {
-                        count.incrementAndGet();
-                    } else {
-                        rejected.incrementAndGet();
-                    }
-                });
-            } catch (Exception e) {
-                LOG.error("Error while submitting seeds: " + e.getMessage(), e);
+
+            try (ChangeFeed<ConfigObject> seeds = DbService.getInstance().getConfigAdapter().listConfigObjects(seedRequest.build())) {
+                Iterator<ConfigObject> it = seeds.stream().iterator();
+                if (it.hasNext()) {
+                    Map<String, Annotation> jobAnnotations = JobExecutionUtil.GetScriptAnnotationsForJob(job);
+
+                    JobExecutionStatus jes = createJobExecutionStatusIfNotExist(job, jobExecutionStatus);
+                    jesFuture.set(jes);
+
+                    it.forEachRemaining(seed -> {
+                        if (crawlSeed(job, seed, jes, jobAnnotations, timeout, addToRunningJob)) {
+                            count.incrementAndGet();
+                        } else {
+                            rejected.incrementAndGet();
+                        }
+                    });
+                    LOG.info("{} seeds for job '{}' started, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
+                } else {
+                    jesFuture.set(null);
+                    LOG.debug("No seeds for job '{}'", job.getMeta().getName());
+                }
+            } catch (DbException e) {
+                throw new RuntimeException(e);
             }
-            LOG.info("{} seeds for job '{}' started, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
         });
+        try {
+            return jesFuture.get();
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    public static JobExecutionStatus createJobExecutionStatusIfNotExist(ConfigObject job, JobExecutionStatus existingJobExecutionStatus) throws DbException {
+        if (existingJobExecutionStatus == null) {
+            JobExecutionStatus jes = DbService.getInstance().getExecutionsAdapter()
+                    .createJobExecutionStatus(job.getId());
+            LOG.info("Creating new job execution '{}'", jes.getId());
+            return jes;
+        } else {
+            return existingJobExecutionStatus;
+        }
     }
 
     public static void queueCountAndBusyChgCount(FutureCallback<CrawlerStatus.Builder> callback) {
@@ -194,6 +235,88 @@ public class JobExecutionUtil {
             }
         }
         return timeout;
+    }
+
+    public static Map<String, Annotation> GetScriptAnnotationsForJob(ConfigObject jobConfig) throws DbException {
+        ConfigAdapter db = DbService.getInstance().getConfigAdapter();
+
+        ConfigObject crawlConfig = db.getConfigObject(jobConfig.getCrawlJob().getCrawlConfigRef());
+        ConfigObject browserConfig = db.getConfigObject(crawlConfig.getCrawlConfig().getBrowserConfigRef());
+
+        Map<String, Annotation> annotations = new HashMap<>();
+
+        // Get scope script annotations
+        if (!jobConfig.getCrawlJob().hasScopeScriptRef()) {
+            throw new IllegalArgumentException("Missing scopescript ref for crawl job " + jobConfig.getId());
+        }
+        db.getConfigObject(jobConfig.getCrawlJob().getScopeScriptRef()).getMeta().getAnnotationList()
+                .forEach(a -> annotations.put(a.getKey(), a));
+
+        // Get annotations for referenced browser scripts
+        browserConfig.getBrowserConfig().getScriptRefList().forEach(r -> {
+            try {
+                db.getConfigObject(r).getMeta().getAnnotationList().forEach(a -> annotations.put(a.getKey(), a));
+            } catch (DbException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Get annotations for browser scripts matching selectors
+        db.listConfigObjects(ListRequest.newBuilder().setKind(Kind.browserScript).addAllLabelSelector(
+                browserConfig.getBrowserConfig().getScriptSelectorList()).build()).stream()
+                .flatMap(s -> s.getMeta().getAnnotationList().stream())
+                .forEach(a -> annotations.put(a.getKey(), a));
+
+        // Override with job specific annotations
+        jobConfig.getMeta().getAnnotationList().stream()
+                .filter(a -> annotations.containsKey(a.getKey()))
+                .forEach(a -> annotations.put(a.getKey(), a));
+
+        return Collections.unmodifiableMap(annotations);
+    }
+
+    public static Map<String, Annotation> GetScriptAnnotationOverridesForSeed(
+            ConfigObject seed, ConfigObject jobConfig, Map<String, Annotation> annotations) throws DbException {
+
+        ConfigAdapter db = DbService.getInstance().getConfigAdapter();
+
+        Map<String, Annotation> result = new HashMap<>();
+        result.putAll(annotations);
+
+        if (seed.getSeed().hasEntityRef()) {
+            overrideAnnotation(db.getConfigObject(seed.getSeed().getEntityRef()).getMeta().getAnnotationList(), jobConfig, result);
+        }
+
+        overrideAnnotation(seed.getMeta().getAnnotationList(), jobConfig, result);
+
+        return result;
+    }
+
+    static void overrideAnnotation(List<Annotation> annotations, ConfigObject jobConfig, Map<String, Annotation> jobAnnotations) {
+        List<Annotation> ann = new ArrayList<>();
+        ann.addAll(annotations);
+        for (Iterator<Annotation> it = ann.iterator(); it.hasNext(); ) {
+            Annotation a = it.next();
+            if (jobAnnotations.containsKey(a.getKey())) {
+                jobAnnotations.put(a.getKey(), a);
+                it.remove();
+            }
+        }
+        for (Annotation a : ann) {
+            if (a.getKey().startsWith("{")) {
+                int endIdx = a.getKey().indexOf('}');
+                if (endIdx == -1) {
+                    throw new IllegalArgumentException("Missing matching '}' for annotation: " + a.getKey());
+                }
+                String jobIdOrName = a.getKey().substring(1, endIdx);
+                String key = a.getKey().substring(endIdx + 1);
+                if ((jobConfig.getId().equals(jobIdOrName) || jobConfig.getMeta().getName().equals(jobIdOrName))
+                        && jobAnnotations.containsKey(key)) {
+                    a = a.toBuilder().setKey(key).build();
+                    jobAnnotations.put(a.getKey(), a);
+                }
+            }
+        }
     }
 
     @FunctionalInterface

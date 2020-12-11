@@ -28,6 +28,10 @@ public class Settings extends CommonSettings {
 
     private int frontierPort;
 
+    private String scopeserviceHost;
+
+    private int scopeservicePort;
+
     private String openIdConnectIssuer;
 
     private String apiKeyRoleMappingFile;
@@ -56,6 +60,22 @@ public class Settings extends CommonSettings {
 
     public void setFrontierPort(int frontierPort) {
         this.frontierPort = frontierPort;
+    }
+
+    public String getScopeserviceHost() {
+        return scopeserviceHost;
+    }
+
+    public void setScopeserviceHost(String scopeserviceHost) {
+        this.scopeserviceHost = scopeserviceHost;
+    }
+
+    public int getScopeservicePort() {
+        return scopeservicePort;
+    }
+
+    public void setScopeservicePort(int scopeservicePort) {
+        this.scopeservicePort = scopeservicePort;
     }
 
     public String getOpenIdConnectIssuer() {

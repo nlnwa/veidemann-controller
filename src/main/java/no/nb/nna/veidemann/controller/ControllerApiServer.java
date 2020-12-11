@@ -57,15 +57,17 @@ public class ControllerApiServer implements AutoCloseable {
     private final ExecutorService threadPool;
     final UserRoleMapper userRoleMapper;
     final Settings settings;
+    final ScopeServiceClient scopeServiceClient;
 
-    public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper) {
-        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper);
+    public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient) {
+        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper, scopeServiceClient);
     }
 
-    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper) {
+    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient) {
         this.settings = settings;
         this.serverBuilder = serverBuilder;
         this.userRoleMapper = userRoleMapper;
+        this.scopeServiceClient = scopeServiceClient;
         threadPool = Executors.newCachedThreadPool();
         serverBuilder.executor(threadPool);
     }
@@ -96,7 +98,7 @@ public class ControllerApiServer implements AutoCloseable {
         }
 
         server = serverBuilder
-                .addService(createService(new ConfigService(), interceptors))
+                .addService(createService(new ConfigService(scopeServiceClient), interceptors))
                 .addService(createService(new ControllerService(settings), interceptors))
                 .addService(createService(new ReportService(), interceptors))
                 .addService(createService(new EventService(), interceptors))
