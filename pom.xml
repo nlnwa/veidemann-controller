@@ -29,7 +29,7 @@
 
         <veidemann.api.version>1.0.0-beta20</veidemann.api.version>
         <veidemann.commons.version>0.4.9</veidemann.commons.version>
-        <veidemann.rethinkdbadapter.version>0.5.3</veidemann.rethinkdbadapter.version>
+        <veidemann.rethinkdbadapter.version>0.5.4</veidemann.rethinkdbadapter.version>
 
         <log4j.version>2.13.3</log4j.version>
     </properties>
