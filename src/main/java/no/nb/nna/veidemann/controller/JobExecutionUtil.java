@@ -43,6 +43,7 @@ import static no.nb.nna.veidemann.commons.util.ApiTools.buildLabel;
 public class JobExecutionUtil {
     private static final Logger LOG = LoggerFactory.getLogger(JobExecutionUtil.class);
 
+    public final static String SEED_TYPE_LABEL_KEY = "v7n_seed-type";
     private final static Map<String, FrontierClient> frontierClients = new HashMap<>();
 
     private final static ExecutorService exe = new ThreadPoolExecutor(0, 64, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue());
@@ -102,8 +103,8 @@ public class JobExecutionUtil {
 
             LOG.debug("Start harvest of: {}", seed.getMeta().getName());
 
-            String type = ApiTools.getFirstLabelWithKey(seed.getMeta(), "type")
-                    .orElse(buildLabel("type", "url")).getValue().toLowerCase();
+            String type = ApiTools.getFirstLabelWithKey(seed.getMeta(), SEED_TYPE_LABEL_KEY)
+                    .orElse(buildLabel(SEED_TYPE_LABEL_KEY, "url")).getValue().toLowerCase();
 
             FrontierClient frontierClient = frontierClients.get(type);
 
