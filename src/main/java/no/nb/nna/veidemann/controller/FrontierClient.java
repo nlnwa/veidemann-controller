@@ -19,6 +19,9 @@ import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.protobuf.Empty;
+import com.netflix.concurrency.limits.grpc.client.ConcurrencyLimitClientInterceptor;
+import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
+import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.StatusRuntimeException;
@@ -65,8 +68,17 @@ public class FrontierClient implements AutoCloseable {
 
     public FrontierClient(ManagedChannelBuilder<?> channelBuilder, String supportedSeedType) {
         LOG.info("Setting up Frontier client");
-        ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor.Builder(GlobalTracer.get()).build();
-        channel = channelBuilder.intercept(tracingInterceptor).build();
+        ClientInterceptor tracingInterceptor = new ClientTracingInterceptor.Builder(GlobalTracer.get()).build();
+        ClientInterceptor pressureLimitInterceptor = new ConcurrencyLimitClientInterceptor(
+                new GrpcClientLimiterBuilder()
+                        .partitionByMethod()
+                        .partition(FrontierGrpc.getCrawlSeedMethod().getFullMethodName(), 0.2)
+                        .partition(FrontierGrpc.getBusyCrawlHostGroupCountMethod().getFullMethodName(), 0.2)
+                        .partition(FrontierGrpc.getQueueCountForCrawlExecutionMethod().getFullMethodName(), 0.2)
+                        .partition(FrontierGrpc.getQueueCountForCrawlHostGroupMethod().getFullMethodName(), 0.2)
+                        .partition(FrontierGrpc.getQueueCountTotalMethod().getFullMethodName(), 0.2)
+                        .blockOnLimit(true).build());
+        channel = channelBuilder.intercept(tracingInterceptor, pressureLimitInterceptor).build();
         blockingStub = FrontierGrpc.newBlockingStub(channel);
         asyncStub = FrontierGrpc.newStub(channel);
         futureStub = FrontierGrpc.newFutureStub(channel);

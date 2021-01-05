@@ -20,6 +20,7 @@ import com.google.gson.GsonBuilder;
 import com.rethinkdb.ast.ReqlAst;
 import com.rethinkdb.net.Cursor;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import no.nb.nna.veidemann.api.config.v1.Role;
@@ -67,11 +68,15 @@ public class ReportService extends ReportGrpc.ReportImplBase {
 
     @Override
     @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT})
-    public void listCrawlLogs(CrawlLogListRequest request, StreamObserver<CrawlLog> responseObserver) {
+    public void listCrawlLogs(CrawlLogListRequest request, StreamObserver<CrawlLog> observer) {
+        StreamObserver<CrawlLog> responseObserver = new BlockingStreamObserver<>(observer);
         new Thread(() -> {
             try (ChangeFeed<CrawlLog> c = executionsAdapter.listCrawlLogs(request);) {
                 c.stream().forEach(o -> responseObserver.onNext(o));
                 responseObserver.onCompleted();
+            } catch (StatusRuntimeException e) {
+                LOG.error(e.getMessage(), e);
+                responseObserver.onError(e);
             } catch (Exception ex) {
                 LOG.error(ex.getMessage(), ex);
                 Status status = Status.UNKNOWN.withDescription(ex.toString());
@@ -87,11 +92,15 @@ public class ReportService extends ReportGrpc.ReportImplBase {
 
     @Override
     @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT})
-    public void listPageLogs(PageLogListRequest request, StreamObserver<PageLog> responseObserver) {
+    public void listPageLogs(PageLogListRequest request, StreamObserver<PageLog> observer) {
+        StreamObserver<PageLog> responseObserver = new BlockingStreamObserver<>(observer);
         new Thread(() -> {
             try (ChangeFeed<PageLog> c = executionsAdapter.listPageLogs(request);) {
                 c.stream().forEach(o -> responseObserver.onNext(o));
                 responseObserver.onCompleted();
+            } catch (StatusRuntimeException e) {
+                LOG.error(e.getMessage(), e);
+                responseObserver.onError(e);
             } catch (Exception ex) {
                 LOG.error(ex.getMessage(), ex);
                 Status status = Status.UNKNOWN.withDescription(ex.toString());
@@ -106,11 +115,15 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    public void listExecutions(CrawlExecutionsListRequest request, StreamObserver<CrawlExecutionStatus> responseObserver) {
+    public void listExecutions(CrawlExecutionsListRequest request, StreamObserver<CrawlExecutionStatus> observer) {
+        StreamObserver<CrawlExecutionStatus> responseObserver = new BlockingStreamObserver<>(observer);
         new Thread(() -> {
             try (ChangeFeed<CrawlExecutionStatus> c = executionsAdapter.listCrawlExecutionStatus(request);) {
                 c.stream().forEach(o -> responseObserver.onNext(o));
                 responseObserver.onCompleted();
+            } catch (StatusRuntimeException e) {
+                LOG.error(e.getMessage(), e);
+                responseObserver.onError(e);
             } catch (Exception ex) {
                 LOG.error(ex.getMessage(), ex);
                 Status status = Status.UNKNOWN.withDescription(ex.toString());
@@ -120,11 +133,15 @@ public class ReportService extends ReportGrpc.ReportImplBase {
     }
 
     @Override
-    public void listJobExecutions(JobExecutionsListRequest request, StreamObserver<JobExecutionStatus> responseObserver) {
+    public void listJobExecutions(JobExecutionsListRequest request, StreamObserver<JobExecutionStatus> observer) {
+        StreamObserver<JobExecutionStatus> responseObserver = new BlockingStreamObserver<>(observer);
         new Thread(() -> {
             try (ChangeFeed<JobExecutionStatus> c = executionsAdapter.listJobExecutionStatus(request);) {
                 c.stream().forEach(o -> responseObserver.onNext(o));
                 responseObserver.onCompleted();
+            } catch (StatusRuntimeException e) {
+                LOG.error(e.getMessage(), e);
+                responseObserver.onError(e);
             } catch (Exception ex) {
                 LOG.error(ex.getMessage(), ex);
                 Status status = Status.UNKNOWN.withDescription(ex.toString());
