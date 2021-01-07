@@ -122,6 +122,7 @@ public class JobExecutionUtil {
                     }
                 } else {
                     submitSeedCompletionService.submit(() -> frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout));
+                    return true;
                 }
             } else {
                 LOG.warn("No frontier defined for seed type {}", type);
