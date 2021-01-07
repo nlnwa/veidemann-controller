@@ -29,8 +29,9 @@
 
         <veidemann.api.version>1.0.0-beta20</veidemann.api.version>
         <veidemann.commons.version>0.4.9</veidemann.commons.version>
-        <veidemann.rethinkdbadapter.version>0.5.4</veidemann.rethinkdbadapter.version>
+        <veidemann.rethinkdbadapter.version>0.5.5</veidemann.rethinkdbadapter.version>
 
+        <com.github.netflix.concurrency-limits.version>0.3.7</com.github.netflix.concurrency-limits.version>
         <log4j.version>2.13.3</log4j.version>
     </properties>
 
@@ -73,10 +74,17 @@
             <artifactId>cron4j</artifactId>
             <version>2.2.5</version>
         </dependency>
+
         <dependency>
-            <groupId>com.github.nlnwa</groupId>
-            <artifactId>webarchive-commons</artifactId>
-            <version>fixIpv4Parser-SNAPSHOT</version>
+            <groupId>com.github.netflix.concurrency-limits</groupId>
+            <artifactId>concurrency-limits-core</artifactId>
+            <version>${com.github.netflix.concurrency-limits.version}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>com.github.netflix.concurrency-limits</groupId>
+            <artifactId>concurrency-limits-grpc</artifactId>
+            <version>${com.github.netflix.concurrency-limits.version}</version>
         </dependency>
 
         <!-- Configuration framework -->

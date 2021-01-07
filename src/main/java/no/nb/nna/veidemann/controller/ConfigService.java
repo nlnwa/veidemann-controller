@@ -18,6 +18,7 @@ package no.nb.nna.veidemann.controller;
 
 import com.google.protobuf.Empty;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import no.nb.nna.veidemann.api.config.v1.Annotation;
 import no.nb.nna.veidemann.api.config.v1.ConfigGrpc;
@@ -71,20 +72,20 @@ public class ConfigService extends ConfigGrpc.ConfigImplBase {
             @AllowedRoles(value = {Role.READONLY, Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT}),
             @AllowedRoles(value = {Role.ADMIN}, kind = {Kind.roleMapping}),
     })
-    public void listConfigObjects(ListRequest request, StreamObserver<ConfigObject> responseObserver) {
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try (ChangeFeed<ConfigObject> c = db.listConfigObjects(request);) {
-                    c.stream().forEach(o -> responseObserver.onNext(o));
-                    responseObserver.onCompleted();
-                } catch (Exception ex) {
-                    LOG.error(ex.getMessage(), ex);
-                    Status status = Status.UNKNOWN.withDescription(ex.toString());
-                    responseObserver.onError(status.asException());
-                }
+    public void listConfigObjects(ListRequest request, StreamObserver<ConfigObject> observer) {
+        StreamObserver<ConfigObject> responseObserver = new BlockingStreamObserver<>(observer);
+        new Thread(() -> {
+            try (ChangeFeed<ConfigObject> c = db.listConfigObjects(request);) {
+                c.stream().forEach(o -> responseObserver.onNext(o));
+                responseObserver.onCompleted();
+            } catch (StatusRuntimeException e) {
+                LOG.error(e.getMessage(), e);
+                responseObserver.onError(e);
+            } catch (Exception ex) {
+                LOG.error(ex.getMessage(), ex);
+                Status status = Status.UNKNOWN.withDescription(ex.toString());
+                responseObserver.onError(status.asException());
             }
-
         }).start();
     }
 

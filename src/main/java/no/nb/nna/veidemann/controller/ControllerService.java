@@ -117,7 +117,7 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
                         .setId(request.getSeedId())
                         .build());
                 Map<String, Annotation> jobAnnotations = JobExecutionUtil.GetScriptAnnotationsForJob(job);
-                crawlSeed(job, seed, jobExecutionStatus, jobAnnotations, timeout, addToRunningJob);
+                crawlSeed(null, job, seed, jobExecutionStatus, jobAnnotations, timeout, addToRunningJob);
             } else {
                 jobExecutionStatus = JobExecutionUtil.submitSeeds(job, jobExecutionStatus, timeout, addToRunningJob);
             }

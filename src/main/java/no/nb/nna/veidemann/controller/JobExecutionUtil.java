@@ -32,6 +32,8 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletionService;
+import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -46,7 +48,8 @@ public class JobExecutionUtil {
     public final static String SEED_TYPE_LABEL_KEY = "v7n_seed-type";
     private final static Map<String, FrontierClient> frontierClients = new HashMap<>();
 
-    private final static ExecutorService exe = new ThreadPoolExecutor(0, 64, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue());
+    private final static ExecutorService exe = new ThreadPoolExecutor(0, 8, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue());
+    private final static ExecutorService submitSeedExecutor = new ThreadPoolExecutor(0, 4, 10L, TimeUnit.SECONDS, new LinkedBlockingQueue());
 
     private JobExecutionUtil() {
     }
@@ -78,7 +81,7 @@ public class JobExecutionUtil {
         }
     }
 
-    public static boolean crawlSeed(ConfigObject job, ConfigObject seed, JobExecutionStatus jobExecutionStatus,
+    public static boolean crawlSeed(CompletionService<CrawlExecutionId> submitSeedCompletionService, ConfigObject job, ConfigObject seed, JobExecutionStatus jobExecutionStatus,
                                     Map<String, Annotation> jobAnnotations, OffsetDateTime timeout, boolean addToRunningJob) {
         if (!seed.getSeed().getDisabled()) {
 
@@ -109,20 +112,22 @@ public class JobExecutionUtil {
             FrontierClient frontierClient = frontierClients.get(type);
 
             if (frontierClient != null) {
-                exe.submit(() -> {
+                if (submitSeedCompletionService == null) {
                     try {
-                        Map<String, Annotation> annotations = JobExecutionUtil.GetScriptAnnotationOverridesForSeed(seed, job, jobAnnotations);
                         frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout);
-                    } catch (DbException e) {
-                        LOG.warn("Could not get annotation overrides for seed '{}'", seed.getId(), e);
+                        return true;
+                    } catch (Exception e) {
+                        LOG.warn("Unable to submit seed '{}' for crawling", seed.getMeta().getName(), e);
+                        return false;
                     }
-                });
+                } else {
+                    submitSeedCompletionService.submit(() -> frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout));
+                    return true;
+                }
             } else {
                 LOG.warn("No frontier defined for seed type {}", type);
                 return false;
             }
-
-            return true;
         }
         LOG.debug("Seed '{}' is disabled", seed.getMeta().getName());
         return false;
@@ -149,14 +154,27 @@ public class JobExecutionUtil {
                     JobExecutionStatus jes = createJobExecutionStatusIfNotExist(job, jobExecutionStatus);
                     jesFuture.set(jes);
 
+                    CompletionService<CrawlExecutionId> completionService = new ExecutorCompletionService<>(submitSeedExecutor);
                     it.forEachRemaining(seed -> {
-                        if (crawlSeed(job, seed, jes, jobAnnotations, timeout, addToRunningJob)) {
+                        if (crawlSeed(completionService, job, seed, jes, jobAnnotations, timeout, addToRunningJob)) {
                             count.incrementAndGet();
                         } else {
                             rejected.incrementAndGet();
                         }
                     });
-                    LOG.info("{} seeds for job '{}' started, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
+                    LOG.info("{} seeds for job '{}' submitted, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
+                    AtomicLong failed = new AtomicLong(0L);
+                    for (long i = count.get(); i > 0; i--) {
+                        CrawlExecutionId ceid = null;
+                        try {
+                            ceid = completionService.take().get();
+                            LOG.trace("Crawl Execution '{}' created", ceid.getId());
+                        } catch (Exception e) {
+                            failed.incrementAndGet();
+                            LOG.info("Error starting crawl of seed: " + e.getMessage(), e);
+                        }
+                    }
+                    LOG.info("{} seeds of {} for job '{}' rejected by frontier", failed.get(), count.get(), job.getMeta().getName());
                 } else {
                     jesFuture.set(null);
                     LOG.debug("No seeds for job '{}'", job.getMeta().getName());
