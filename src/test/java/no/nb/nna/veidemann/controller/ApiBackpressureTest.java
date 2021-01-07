@@ -119,7 +119,7 @@ public class ApiBackpressureTest {
 
         callback.waitForCompleted();
         assertThat(callback.onNextCount).isEqualTo(100);
-        assertThat(count.get()).isCloseTo(100, within(1));
+        assertThat(count.get()).isCloseTo(100, within(5));
         assertThat(callback.exception).isEmpty();
     }
 
