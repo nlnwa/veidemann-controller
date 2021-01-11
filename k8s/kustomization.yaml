@@ -1,0 +1,42 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: veidemann
+
+commonLabels:
+  app.kubernetes.io/instance: veidemann-controller
+  app.kubernetes.io/part-of: veidemann
+
+resources:
+  - ../../../src/veidemann/bases/veidemann-controller
+  - ingressroute.yaml
+
+patchesStrategicMerge:
+  - deployment-patch.yaml
+  - service-patch.yaml
+
+patchesJson6902:
+  - target:
+      kind: Deployment
+      name: veidemann-controller
+      version: v1
+      group: apps
+    patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/envFrom/0/secretRef/name
+        value: skaffold-veidemann-controller-rethinkdb
+
+configMapGenerator:
+  - name: skaffold-nginx-config
+    files:
+      - default.conf
+  - name: skaffold-veidemann-controller
+    files:
+      - log4j2.xml
+
+secretGenerator:
+  - name: skaffold-veidemann-controller-rethinkdb
+    envs:
+      # a rethinkdb.env file containing (example):
+      # DB_USER=admin
+      # DB_PASSWORD=password
+      - rethinkdb.env

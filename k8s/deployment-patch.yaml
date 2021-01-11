@@ -1,0 +1,111 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: veidemann-controller
+spec:
+  template:
+    spec:
+
+      hostAliases:
+        - ip: 128.39.224.34
+          hostnames:
+            - stage.nettarkivet.nb.no
+
+      containers:
+        - name: veidemann-controller
+          ports:
+            # Remote debugging port
+            - containerPort: 5005
+              name: jdwp
+            # JMX remote
+            - containerPort: 9010
+              name: jmx
+          resources:
+            requests:
+              memory: 2Gi
+              # jvm interprets this as having 2 cores
+              # affects grpc-java netty thread pool size
+              # see https://github.com/grpc/grpc-java/issues/3057#issuecomment-306238500
+              cpu: 2000m
+            limits:
+              # JVM max heap size is by default 1/4 of memory limit
+              # JVM min heap size is by default 1/64 of memory limit
+              # see https://oracle.github.io/weblogic-kubernetes-operator/faq/resource-settings/
+              # for a nice description
+              memory: 4Gi
+          env:
+            # distroless does NOT use JAVA_OPTS but JAVA_TOOL_OPTIONS
+            - name: JAVA_TOOL_OPTIONS
+              # Load the Java Debug Wire Protocol (JDWP) library:
+              # - listen for the socket connection on port 5005
+              # - not suspending the JVM before the main class loads
+              # Since controller is only process in JVM we can be more generous:
+              # JVM max heap size is 1/2 of memory limit
+              # JVM min heap size is 1/4 of memory limit
+              #
+              # Async profiler
+              # see https://github.com/jvm-profiling-tools/async-profiler
+              # and https://hackernoon.com/profiling-java-applications-with-async-profiler-049s2790
+              #
+              # Java Flight Recorder
+              # see https://docs.oracle.com/javacomponents/jmc-5-4/jfr-runtime-guide/run.htm#JFRUH164
+              value: -XX:MinRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0
+                -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
+
+                # Remote debugging (connect with intellij debugger)
+                # -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
+
+                # Enable more debug information when running flight recorder (or async-profiler)
+                # -XX:+UnlockDiagnosticVMOptions -XX:+DebugNonSafepoints
+
+                # JMX remote management (connect with Java Mission control)
+                # -Dcom.sun.management.jmxremote
+                # -Dcom.sun.management.jmxremote.local.only=false
+                # -Dcom.sun.management.jmxremote.ssl=false
+                # -Dcom.sun.management.jmxremote.authenticate=false
+                # -Dcom.sun.management.jmxremote.port=9010
+                # -Dcom.sun.management.jmxremote.rmi.port=9010
+                # -Djava.rmi.server.hostname=localhost
+
+                # Specify flight recorder options when using -XX:StartFlightRecording
+                # -XX:FlightRecorderOptions=dumponexit=true,dumponexitpath=rec.jfr
+
+                # Start flightrecording
+                # -XX:StartFlightRecording=duration=60s,filename=/app/profiler/out/recording.jfr
+
+                # Run async-profiler as a java agent
+                # -XX:+UseSerialGC -agentpath:"/app/profiler/async-profiler-1.8.3-linux-x64/build/libasyncProfiler.so=start,event=wall,file=/app/profiler/out/wall-flame-graph.svg,threads,svg,simple,title=Wall clock profile,width=1920"
+            - name: SKIP_AUTHENTICATION
+              value: "true"
+            - name: OPENID_CONNECT_ISSUER
+              value: ""
+          volumeMounts:
+            - mountPath: /app/profiler/out
+              name: veidemann-backup
+              subPath: profiler
+        - name: profiler-nginx
+          ports:
+            - containerPort: 80
+              name: http
+          image: nginx:stable-alpine
+          volumeMounts:
+            - mountPath: /etc/nginx/conf.d
+              name: nginx-config
+              readOnly: true
+            - mountPath: /usr/share/nginx/html/profiler
+              name: veidemann-backup
+              subPath: profiler
+              readOnly: true
+      volumes:
+        - name: nginx-config
+          configMap:
+            name: skaffold-nginx-config
+        - name: veidemann-backup
+          persistentVolumeClaim:
+            claimName: veidemann-backup
+        - name: veidemann-config
+          configMap:
+            name: skaffold-veidemann-controller
+            items:
+              - key: log4j2.xml
+                path: log4j2.xml

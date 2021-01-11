@@ -1,0 +1,14 @@
+apiVersion: traefik.containo.us/v1alpha1
+kind: IngressRoute
+metadata:
+  name: skaffold-veidemann-controller
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`stage.nettarkivet.nb.no`) && PathPrefix(`/profiler`)
+      kind: Rule
+      services:
+        - name: veidemann-controller
+          port: 8080
+  tls: {}

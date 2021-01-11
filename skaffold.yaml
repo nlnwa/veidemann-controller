@@ -1,0 +1,24 @@
+apiVersion: skaffold/v2beta10
+kind: Config
+build:
+  artifacts:
+  - image: norsknettarkiv/veidemann-controller
+    jib:
+      args:
+        - "-Djib.extraDirectories.paths=k8s/extra"
+      fromImage: gcr.io/distroless/java-debian10:debug
+  - image: norsknettarkiv/http-server
+    docker:
+      dockerfile: k8s/Dockerfile
+      cacheFrom:
+        - "python:alpine"
+deploy:
+  kustomize:
+    paths:
+    - k8s
+portForward:
+  - resourceType: service
+    resourceName: veidemann-controller
+    namespace: veidemann
+    port: 8080
+    localPort: 8081
