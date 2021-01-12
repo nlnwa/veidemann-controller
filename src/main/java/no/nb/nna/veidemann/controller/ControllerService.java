@@ -46,6 +46,7 @@ import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
+import no.nb.nna.veidemann.controller.ControllerApiServer.JobExecutionListener;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.checkerframework.checker.nullness.qual.Nullable;
 import org.slf4j.Logger;
@@ -71,9 +72,11 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
     private final ExecutionsAdapter executionsAdapter;
 
     private final Settings settings;
+    private final List<JobExecutionListener> jobExecutionListeners;
 
-    public ControllerService(Settings settings) {
+    public ControllerService(Settings settings, List<JobExecutionListener> jobExecutionListeners) {
         this.settings = settings;
+        this.jobExecutionListeners = jobExecutionListeners;
         this.db = DbService.getInstance().getConfigAdapter();
         this.executionsAdapter = DbService.getInstance().getExecutionsAdapter();
     }
@@ -119,7 +122,10 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
                 Map<String, Annotation> jobAnnotations = JobExecutionUtil.GetScriptAnnotationsForJob(job);
                 crawlSeed(null, job, seed, jobExecutionStatus, jobAnnotations, timeout, addToRunningJob);
             } else {
-                jobExecutionStatus = JobExecutionUtil.submitSeeds(job, jobExecutionStatus, timeout, addToRunningJob);
+                jobExecutionStatus = JobExecutionUtil.submitSeeds(job, jobExecutionStatus, timeout, addToRunningJob, jobExecutionListeners);
+            }
+            for (JobExecutionListener l : jobExecutionListeners) {
+                l.onJobStarting(jobExecutionStatus.getId());
             }
 
             RunCrawlReply.Builder reply = RunCrawlReply.newBuilder();

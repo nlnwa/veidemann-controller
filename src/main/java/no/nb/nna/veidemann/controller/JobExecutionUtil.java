@@ -21,6 +21,7 @@ import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.util.ApiTools;
+import no.nb.nna.veidemann.controller.ControllerApiServer.JobExecutionListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,9 +36,13 @@ import java.util.Map;
 import java.util.concurrent.CompletionService;
 import java.util.concurrent.ExecutorCompletionService;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.ThreadPoolExecutor.CallerRunsPolicy;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static no.nb.nna.veidemann.commons.util.ApiTools.buildLabel;
@@ -48,8 +53,10 @@ public class JobExecutionUtil {
     public final static String SEED_TYPE_LABEL_KEY = "v7n_seed-type";
     private final static Map<String, FrontierClient> frontierClients = new HashMap<>();
 
-    private final static ExecutorService exe = new ThreadPoolExecutor(0, 8, 60L, TimeUnit.SECONDS, new LinkedBlockingQueue());
-    private final static ExecutorService submitSeedExecutor = new ThreadPoolExecutor(0, 4, 10L, TimeUnit.SECONDS, new LinkedBlockingQueue());
+    private final static ExecutorService exe = Executors.newFixedThreadPool(16);
+    private final static ExecutorService submitSeedExecutor =
+            new ThreadPoolExecutor(4, 16, 10L, TimeUnit.SECONDS,
+                    new LinkedBlockingQueue(5000), new CallerRunsPolicy());
 
     private JobExecutionUtil() {
     }
@@ -121,7 +128,13 @@ public class JobExecutionUtil {
                         return false;
                     }
                 } else {
-                    submitSeedCompletionService.submit(() -> frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout));
+                    try {
+                        submitSeedCompletionService.submit(() -> frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout));
+                    } catch (Exception e) {
+                        System.out.println("¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤");
+//                        e.printStackTrace();
+                        return false;
+                    }
                     return true;
                 }
             } else {
@@ -134,7 +147,7 @@ public class JobExecutionUtil {
     }
 
     public static JobExecutionStatus submitSeeds(ConfigObject job, JobExecutionStatus jobExecutionStatus, OffsetDateTime timeout,
-                                                 boolean addToRunningJob) {
+                                                 boolean addToRunningJob, List<JobExecutionListener> jobExecutionListeners) {
         SettableFuture<JobExecutionStatus> jesFuture = SettableFuture.create();
 
         ListRequest.Builder seedRequest = ListRequest.newBuilder()
@@ -145,6 +158,7 @@ public class JobExecutionUtil {
         exe.submit(() -> {
             AtomicLong count = new AtomicLong(0L);
             AtomicLong rejected = new AtomicLong(0L);
+            AtomicBoolean done = new AtomicBoolean(false);
 
             try (ChangeFeed<ConfigObject> seeds = DbService.getInstance().getConfigAdapter().listConfigObjects(seedRequest.build())) {
                 Iterator<ConfigObject> it = seeds.stream().iterator();
@@ -154,7 +168,28 @@ public class JobExecutionUtil {
                     JobExecutionStatus jes = createJobExecutionStatusIfNotExist(job, jobExecutionStatus);
                     jesFuture.set(jes);
 
-                    CompletionService<CrawlExecutionId> completionService = new ExecutorCompletionService<>(submitSeedExecutor);
+                    CompletionService<CrawlExecutionId> completionService = new ExecutorCompletionService<>(submitSeedExecutor, new LinkedBlockingQueue<>());
+                    exe.execute(() -> {
+                        AtomicLong failed = new AtomicLong(0L);
+                        AtomicLong processed = new AtomicLong(0);
+                        while (done.get() == false || processed.get() < count.get()) {
+                            CrawlExecutionId ceid = null;
+                            try {
+                                Future<CrawlExecutionId> f = completionService.take();
+                                processed.incrementAndGet();
+                                ceid = f.get();
+                                LOG.trace("Crawl Execution '{}' created", ceid.getId());
+                            } catch (Exception e) {
+                                failed.incrementAndGet();
+                                LOG.info("Error starting crawl of seed: " + e.getMessage(), e);
+                            }
+                        }
+                        LOG.info("{} seeds of {} for job '{}' rejected by frontier", failed.get(), count.get(), job.getMeta().getName());
+                        for (JobExecutionListener l : jobExecutionListeners) {
+                            l.onJobStarted(jes.getId());
+                        }
+                    });
+
                     it.forEachRemaining(seed -> {
                         if (crawlSeed(completionService, job, seed, jes, jobAnnotations, timeout, addToRunningJob)) {
                             count.incrementAndGet();
@@ -162,19 +197,8 @@ public class JobExecutionUtil {
                             rejected.incrementAndGet();
                         }
                     });
+                    done.set(true);
                     LOG.info("{} seeds for job '{}' submitted, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
-                    AtomicLong failed = new AtomicLong(0L);
-                    for (long i = count.get(); i > 0; i--) {
-                        CrawlExecutionId ceid = null;
-                        try {
-                            ceid = completionService.take().get();
-                            LOG.trace("Crawl Execution '{}' created", ceid.getId());
-                        } catch (Exception e) {
-                            failed.incrementAndGet();
-                            LOG.info("Error starting crawl of seed: " + e.getMessage(), e);
-                        }
-                    }
-                    LOG.info("{} seeds of {} for job '{}' rejected by frontier", failed.get(), count.get(), job.getMeta().getName());
                 } else {
                     jesFuture.set(null);
                     LOG.debug("No seeds for job '{}'", job.getMeta().getName());

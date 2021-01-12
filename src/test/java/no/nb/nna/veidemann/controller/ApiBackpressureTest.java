@@ -39,7 +39,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.Iterator;
 import java.util.Optional;
-import java.util.Spliterators;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -47,8 +46,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.stream.Stream;
-import java.util.stream.StreamSupport;
 
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.handleGet;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -154,40 +151,6 @@ public class ApiBackpressureTest {
             assertThat(e).isInstanceOf(StatusRuntimeException.class);
             assertThat(((StatusRuntimeException) e).getStatus()).isEqualTo(Status.ABORTED);
         });
-    }
-
-    class RepeatingChangeFeed<T> implements ChangeFeed<T> {
-        int count;
-        final T value;
-
-        public RepeatingChangeFeed(int count, T value) {
-            this.count = count;
-            this.value = value;
-        }
-
-        @Override
-        public Stream<T> stream() {
-            Iterator<T> it = new Iterator<T>() {
-                int c = count;
-
-                @Override
-                public boolean hasNext() {
-                    return c > 0;
-                }
-
-                @Override
-                public T next() {
-                    c--;
-                    return value;
-                }
-            };
-
-            return StreamSupport.stream(Spliterators.spliteratorUnknownSize(it, 0), false);
-        }
-
-        @Override
-        public void close() {
-        }
     }
 
     class ListEventCallback {

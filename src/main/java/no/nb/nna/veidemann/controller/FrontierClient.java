@@ -24,6 +24,7 @@ import com.netflix.concurrency.limits.grpc.client.GrpcClientLimiterBuilder;
 import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.opentracing.contrib.ClientTracingInterceptor;
 import io.opentracing.util.GlobalTracer;
@@ -96,18 +97,44 @@ public class FrontierClient implements AutoCloseable {
      */
     public CrawlExecutionId crawlSeed(ConfigObject crawlJob, ConfigObject seed, JobExecutionStatus jobExecution,
                                       OffsetDateTime timeout) {
-        try {
-            CrawlSeedRequest.Builder request = CrawlSeedRequest.newBuilder()
-                    .setJob(crawlJob)
-                    .setSeed(seed)
-                    .setJobExecutionId(jobExecution.getId());
-            if (timeout != null) {
-                request.setTimeout(ProtoUtils.odtToTs(timeout));
+        int retryLimit = 3;
+        double backoffMultiplier = 1.5;
+        long retrySleep = 100;
+        int retryCount = 0;
+
+        CrawlSeedRequest.Builder request = CrawlSeedRequest.newBuilder()
+                .setJob(crawlJob)
+                .setSeed(seed)
+                .setJobExecutionId(jobExecution.getId());
+        if (timeout != null) {
+            request.setTimeout(ProtoUtils.odtToTs(timeout));
+        }
+        while (true) {
+            try {
+                return GrpcUtil.forkedCall(() -> blockingStub.crawlSeed(request.build()));
+            } catch (StatusRuntimeException ex) {
+                if (ex.getStatus().getCode() == Status.UNAVAILABLE.getCode() && ex.getStatus().getDescription().contains("limit")) {
+                    if (retryCount >= retryLimit) {
+                        LOG.error("RPC failed: " + ex.getStatus(), ex);
+                        throw ex;
+                    }
+                    LOG.debug("Frontier concurrency limit reached. Retrying in {}ms", retrySleep);
+                    try {
+                        Thread.sleep(retrySleep);
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        throw new RuntimeException(e);
+                    }
+                    retrySleep += retrySleep * backoffMultiplier;
+                    retryCount++;
+                } else {
+                    LOG.error("RPC failed: " + ex.getStatus(), ex);
+                    throw ex;
+                }
+            } catch (Exception ex) {
+                LOG.error("RPC failed: " + ex.getMessage(), ex);
+                throw ex;
             }
-            return GrpcUtil.forkedCall(() -> blockingStub.crawlSeed(request.build()));
-        } catch (StatusRuntimeException ex) {
-            LOG.error("RPC failed: " + ex.getStatus(), ex);
-            throw ex;
         }
     }
 

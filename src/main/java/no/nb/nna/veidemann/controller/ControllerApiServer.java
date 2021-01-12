@@ -59,6 +59,13 @@ public class ControllerApiServer implements AutoCloseable {
     final Settings settings;
     final ScopeServiceClient scopeServiceClient;
 
+    public interface JobExecutionListener {
+        void onJobStarting(String jobExecutionId);
+        void onJobStarted(String jobExecutionId);
+    }
+
+    final List<JobExecutionListener> jobExecutionListeners = new ArrayList<>();
+
     public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient) {
         this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper, scopeServiceClient);
     }
@@ -70,6 +77,20 @@ public class ControllerApiServer implements AutoCloseable {
         this.scopeServiceClient = scopeServiceClient;
         threadPool = Executors.newCachedThreadPool();
         serverBuilder.executor(threadPool);
+    }
+
+    /**
+     * Add a listener for JobExecution events.
+     *
+     * This is mostly meant for unit tests.
+     * @param l
+     */
+    public void addJobExecutionListener(JobExecutionListener l) {
+        jobExecutionListeners.add(l);
+    }
+
+    public void removeJobExecutionListener(JobExecutionListener l) {
+        jobExecutionListeners.remove(l);
     }
 
     public ControllerApiServer start() {
@@ -99,7 +120,7 @@ public class ControllerApiServer implements AutoCloseable {
 
         server = serverBuilder
                 .addService(createService(new ConfigService(scopeServiceClient), interceptors))
-                .addService(createService(new ControllerService(settings), interceptors))
+                .addService(createService(new ControllerService(settings, jobExecutionListeners), interceptors))
                 .addService(createService(new ReportService(), interceptors))
                 .addService(createService(new EventService(), interceptors))
                 .build();

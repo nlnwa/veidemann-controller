@@ -22,6 +22,8 @@ import no.nb.nna.veidemann.controller.JobExecutionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.calculateTimeout;
 
 /**
@@ -41,6 +43,6 @@ public class ScheduledCrawlJob extends Task {
     public void execute(TaskExecutionContext context) throws RuntimeException {
         LOG.debug("Job '{}' starting", job.getMeta().getName());
 
-        JobExecutionUtil.submitSeeds(job, null, calculateTimeout(job), false);
+        JobExecutionUtil.submitSeeds(job, null, calculateTimeout(job), false, Collections.EMPTY_LIST);
     }
 }
