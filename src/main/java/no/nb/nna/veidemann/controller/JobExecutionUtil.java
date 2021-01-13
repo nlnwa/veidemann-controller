@@ -128,13 +128,7 @@ public class JobExecutionUtil {
                         return false;
                     }
                 } else {
-                    try {
-                        submitSeedCompletionService.submit(() -> frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout));
-                    } catch (Exception e) {
-                        System.out.println("¤¤¤¤¤¤¤¤¤¤¤¤¤¤¤");
-//                        e.printStackTrace();
-                        return false;
-                    }
+                    submitSeedCompletionService.submit(() -> frontierClient.crawlSeed(job, seed, jobExecutionStatus, timeout));
                     return true;
                 }
             } else {

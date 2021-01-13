@@ -178,7 +178,7 @@ public class ApiConcurrencyTest {
             long time = System.currentTimeMillis();
 
             // Ensure that status request was handled while job was starting
-            Assertions.assertThat(statusReplyTime.get()).isLessThan(time).isNotCloseTo(time, Offset.offset(800L));
+            Assertions.assertThat(statusReplyTime.get()).isLessThan(time).isNotCloseTo(time, Offset.offset(50L));
         }
     }
 
