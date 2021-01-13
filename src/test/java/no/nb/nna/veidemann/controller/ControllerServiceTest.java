@@ -129,7 +129,7 @@ public class ControllerServiceTest {
                     return CrawlExecutionId.newBuilder().setId("ceid1").build();
                 });
 
-        ConfigObject entity = newConfObj(Kind.browserScript, "en1", ann("bs3", "bs3valFromEntity")).build();
+        ConfigObject entity = newConfObj(Kind.crawlEntity, "en1", ann("bs3", "bs3valFromEntity")).build();
         ConfigRef entityRef = ApiTools.refForConfig(entity);
         when(configAdapterMock.getConfigObject(entityRef))
                 .thenReturn(entity);
