@@ -38,11 +38,8 @@ import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionId;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionStatus;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlHostGroup;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
-import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus.State;
-import no.nb.nna.veidemann.api.report.v1.JobExecutionsListRequest;
 import no.nb.nna.veidemann.commons.auth.AllowedRoles;
 import no.nb.nna.veidemann.commons.auth.RolesContextKey;
-import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
@@ -56,7 +53,6 @@ import java.time.OffsetDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.calculateTimeout;
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.crawlSeed;
@@ -96,17 +92,8 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
             JobExecutionStatus jobExecutionStatus = null;
             boolean addToRunningJob = false;
 
-            ChangeFeed<JobExecutionStatus> runningJobsR = DbService.getInstance().getExecutionsAdapter()
-                    .listJobExecutionStatus(JobExecutionsListRequest.newBuilder()
-                            .addState(State.RUNNING).build());
-
-            List<JobExecutionStatus> runningJobs = runningJobsR
-                    .stream()
-                    .filter(jes -> jes.getJobId().equals(request.getJobId()))
-                    .collect(Collectors.toList());
-
-            if (!runningJobs.isEmpty()) {
-                jobExecutionStatus = runningJobs.get(0);
+            jobExecutionStatus = JobExecutionUtil.getRunningJobExecutionStatusForJob(job);
+            if (jobExecutionStatus != null) {
                 addToRunningJob = true;
                 LOG.info("Adding seeds to running job execution'{}'", jobExecutionStatus.getId());
             }
@@ -114,25 +101,32 @@ public class ControllerService extends ControllerGrpc.ControllerImplBase {
             OffsetDateTime timeout = calculateTimeout(job);
 
             if (!request.getSeedId().isEmpty()) {
+                // Start only the requested seed for the job
                 jobExecutionStatus = JobExecutionUtil.createJobExecutionStatusIfNotExist(job, jobExecutionStatus);
+                for (JobExecutionListener l : jobExecutionListeners) {
+                    l.onJobStarting(jobExecutionStatus.getId());
+                }
                 ConfigObject seed = db.getConfigObject(ConfigRef.newBuilder()
                         .setKind(Kind.seed)
                         .setId(request.getSeedId())
                         .build());
                 Map<String, Annotation> jobAnnotations = JobExecutionUtil.GetScriptAnnotationsForJob(job);
                 crawlSeed(null, job, seed, jobExecutionStatus, jobAnnotations, timeout, addToRunningJob);
+                for (JobExecutionListener l : jobExecutionListeners) {
+                    l.onJobStarted(jobExecutionStatus.getId());
+                }
             } else {
+                // Start all seeds for the job
                 jobExecutionStatus = JobExecutionUtil.submitSeeds(job, jobExecutionStatus, timeout, addToRunningJob, jobExecutionListeners);
-            }
-            for (JobExecutionListener l : jobExecutionListeners) {
-                l.onJobStarting(jobExecutionStatus.getId());
+                if (jobExecutionStatus == null) {
+                    Status status = Status.FAILED_PRECONDITION.withDescription("No seeds associated with job " + job.getMeta().getName());
+                    responseObserver.onError(status.asException());
+                    return;
+                }
             }
 
-            RunCrawlReply.Builder reply = RunCrawlReply.newBuilder();
-            if (jobExecutionStatus != null) {
-                reply.setJobExecutionId(jobExecutionStatus.getId());
-            }
-            responseObserver.onNext(reply.build());
+            RunCrawlReply reply = RunCrawlReply.newBuilder().setJobExecutionId(jobExecutionStatus.getId()).build();
+            responseObserver.onNext(reply);
             responseObserver.onCompleted();
         } catch (Exception ex) {
             LOG.error(ex.getMessage(), ex);
