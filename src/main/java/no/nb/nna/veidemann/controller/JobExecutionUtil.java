@@ -6,6 +6,7 @@ import com.google.common.util.concurrent.ListenableFuture;
 import com.google.common.util.concurrent.SettableFuture;
 import io.grpc.Status;
 import io.grpc.stub.StreamObserver;
+import no.nb.nna.veidemann.api.commons.v1.FieldMask;
 import no.nb.nna.veidemann.api.config.v1.Annotation;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.Kind;
@@ -15,7 +16,9 @@ import no.nb.nna.veidemann.api.frontier.v1.CountResponse;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionId;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlHostGroup;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
+import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus.State;
 import no.nb.nna.veidemann.api.report.v1.CrawlExecutionsListRequest;
+import no.nb.nna.veidemann.api.report.v1.JobExecutionsListRequest;
 import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.ConfigAdapter;
 import no.nb.nna.veidemann.commons.db.DbException;
@@ -61,7 +64,7 @@ public class JobExecutionUtil {
     private JobExecutionUtil() {
     }
 
-    static void addFrontierClient(String seedType, FrontierClient client) {
+    public static void addFrontierClient(String seedType, FrontierClient client) {
         frontierClients.put(seedType.toLowerCase(), client);
     }
 
@@ -164,6 +167,10 @@ public class JobExecutionUtil {
 
                     CompletionService<CrawlExecutionId> completionService = new ExecutorCompletionService<>(submitSeedExecutor, new LinkedBlockingQueue<>());
                     exe.execute(() -> {
+                        for (JobExecutionListener l : jobExecutionListeners) {
+                            l.onJobStarting(jes.getId());
+                        }
+
                         AtomicLong failed = new AtomicLong(0L);
                         AtomicLong processed = new AtomicLong(0);
                         while (done.get() == false || processed.get() < count.get()) {
@@ -195,7 +202,7 @@ public class JobExecutionUtil {
                     LOG.info("{} seeds for job '{}' submitted, {} seeds rejected", count.get(), job.getMeta().getName(), rejected.get());
                 } else {
                     jesFuture.set(null);
-                    LOG.debug("No seeds for job '{}'", job.getMeta().getName());
+                    LOG.info("No seeds for job '{}'", job.getMeta().getName());
                 }
             } catch (DbException e) {
                 throw new RuntimeException(e);
@@ -206,6 +213,23 @@ public class JobExecutionUtil {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    /**
+     * Gets a running jobExecution for a job or null if not running.
+     *
+     * @param job the job to check if running
+     * @return a JobExecutionStatus with state RUNNING or null if no job was not running
+     * @throws DbException
+     */
+    public static JobExecutionStatus getRunningJobExecutionStatusForJob(ConfigObject job) throws DbException {
+        ChangeFeed<JobExecutionStatus> runningJobsR = DbService.getInstance().getExecutionsAdapter()
+                .listJobExecutionStatus(JobExecutionsListRequest.newBuilder()
+                        .setQueryMask(FieldMask.newBuilder().addPaths("jobId"))
+                        .setQueryTemplate(JobExecutionStatus.newBuilder().setJobId(job.getId()))
+                        .addState(State.RUNNING).build());
+
+        return runningJobsR.stream().findAny().orElse(null);
     }
 
     public static JobExecutionStatus createJobExecutionStatusIfNotExist(ConfigObject job, JobExecutionStatus existingJobExecutionStatus) throws DbException {

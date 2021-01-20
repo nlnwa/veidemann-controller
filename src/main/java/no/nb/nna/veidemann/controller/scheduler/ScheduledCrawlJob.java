@@ -18,11 +18,15 @@ package no.nb.nna.veidemann.controller.scheduler;
 import it.sauronsoftware.cron4j.Task;
 import it.sauronsoftware.cron4j.TaskExecutionContext;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
+import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
+import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.controller.JobExecutionUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static no.nb.nna.veidemann.controller.JobExecutionUtil.calculateTimeout;
 
@@ -35,14 +39,27 @@ public class ScheduledCrawlJob extends Task {
 
     final ConfigObject job;
 
+    static final Lock lock = new ReentrantLock();
+
     public ScheduledCrawlJob(ConfigObject job) {
         this.job = job;
     }
 
     @Override
     public void execute(TaskExecutionContext context) throws RuntimeException {
-        LOG.debug("Job '{}' starting", job.getMeta().getName());
-
-        JobExecutionUtil.submitSeeds(job, null, calculateTimeout(job), false, Collections.EMPTY_LIST);
+        lock.lock();
+        try {
+            JobExecutionStatus jobExecutionStatus = JobExecutionUtil.getRunningJobExecutionStatusForJob(job);
+            if (jobExecutionStatus == null) {
+                LOG.debug("Job '{}' starting", job.getMeta().getName());
+                JobExecutionUtil.submitSeeds(job, jobExecutionStatus, calculateTimeout(job), false, Collections.EMPTY_LIST);
+            } else {
+                LOG.info("The job '{}' is already running. Job execution: '{}'", job.getMeta().getName(), jobExecutionStatus.getId());
+            }
+        } catch (DbException e) {
+            LOG.warn("Could not start scheduled job '{}'.", job.getMeta().getName());
+        } finally {
+            lock.unlock();
+        }
     }
 }

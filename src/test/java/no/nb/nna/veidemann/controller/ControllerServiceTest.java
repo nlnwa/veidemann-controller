@@ -23,6 +23,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.Metadata;
 import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
+import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.inprocess.InProcessChannelBuilder;
 import io.grpc.inprocess.InProcessServerBuilder;
@@ -34,6 +35,7 @@ import no.nb.nna.veidemann.api.config.v1.ConfigGrpc;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.config.v1.ConfigRef;
 import no.nb.nna.veidemann.api.config.v1.CrawlConfig;
+import no.nb.nna.veidemann.api.config.v1.CrawlLimitsConfig;
 import no.nb.nna.veidemann.api.config.v1.Kind;
 import no.nb.nna.veidemann.api.config.v1.ListRequest;
 import no.nb.nna.veidemann.api.config.v1.Role;
@@ -68,8 +70,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.stubbing.Answer;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -110,7 +114,7 @@ public class ControllerServiceTest {
         db = DbService.configure(dbProviderMock);
         FrontierClient frontierClientMock = mock(FrontierClient.class);
         JobExecutionUtil.addFrontierClient("url", frontierClientMock);
-        frontierInvocations = new ArrayList<>();
+        frontierInvocations = Collections.synchronizedList(new ArrayList<>());
         when(frontierClientMock.crawlSeed(any(), any(), any(), any()))
                 .thenAnswer(invocation -> {
                     try {
@@ -186,10 +190,21 @@ public class ControllerServiceTest {
         when(configAdapterMock.getConfigObject(jobConfig2Ref))
                 .thenReturn(jobConfig2);
 
+        jobConfigB = newConfObj(Kind.crawlJob, "job3");
+        jobConfigB.getCrawlJobBuilder()
+                .setLimits(CrawlLimitsConfig.newBuilder().setMaxDurationS(10))
+                .setCrawlConfigRef(crawlConfigRef)
+                .setScopeScriptRef(scopescriptRef);
+        ConfigObject jobConfig3 = jobConfigB.build();
+        ConfigRef jobConfig3Ref = ApiTools.refForConfig(jobConfig3);
+        when(configAdapterMock.getConfigObject(jobConfig3Ref))
+                .thenReturn(jobConfig3);
+
         ConfigObject.Builder seedB = newConfObj(Kind.seed, "seed1", ann("bs1", "bs1valFromSeed"), ann("{job2}bs2", "bs2valFromSeed"));
         seedB.getSeedBuilder()
                 .setEntityRef(entityRef)
-                .addJobRef(jobConfig1Ref);
+                .addJobRef(jobConfig1Ref)
+                .addJobRef(jobConfig3Ref);
         ConfigObject seed1 = seedB.build();
         ConfigRef seed1Ref = ApiTools.refForConfig(seed1);
         when(configAdapterMock.getConfigObject(seed1Ref))
@@ -218,6 +233,12 @@ public class ControllerServiceTest {
                 .setQueryMask(FieldMask.newBuilder().addPaths("seed.jobRef"))
                 .build()))
                 .thenReturn(new ArrayChangeFeed<>());
+        when(configAdapterMock.listConfigObjects(ListRequest.newBuilder()
+                .setKind(Kind.seed)
+                .setQueryTemplate(ConfigObject.newBuilder().setSeed(Seed.newBuilder().addJobRef(jobConfig3Ref)))
+                .setQueryMask(FieldMask.newBuilder().addPaths("seed.jobRef"))
+                .build()))
+                .thenReturn(new ArrayChangeFeed<>(seed1));
 
         when(executionsAdapterMock.listJobExecutionStatus(any()))
                 .thenReturn(new ArrayChangeFeed<>());
@@ -227,6 +248,8 @@ public class ControllerServiceTest {
                 .thenReturn(JobExecutionStatus.newBuilder().setId("job1Execution2").build());
         when(executionsAdapterMock.createJobExecutionStatus("job2"))
                 .thenReturn(JobExecutionStatus.newBuilder().setId("job2Execution1").build());
+        when(executionsAdapterMock.createJobExecutionStatus("job3"))
+                .thenReturn(JobExecutionStatus.newBuilder().setId("job3Execution1").build());
     }
 
     @AfterEach
@@ -330,6 +353,8 @@ public class ControllerServiceTest {
         Settings settings = new Settings();
         settings.setSkipAuthentication(true);
         inProcessServer = new ControllerApiServerMock(settings, null, inProcessServerBuilder, null).start();
+        JobExecutionStartedListener jobStarted = new JobExecutionStartedListener();
+        inProcessServer.addJobExecutionListener(jobStarted);
 
         // Test crawl of specific seed
         RunCrawlRequest request = RunCrawlRequest.newBuilder().setJobId("job1").setSeedId("seed1").build();
@@ -337,7 +362,7 @@ public class ControllerServiceTest {
         assertThat(reply.getJobExecutionId()).isEqualTo("job1Execution1");
 
         // Let async submission of Frontier requests get a little time to finish.
-        Thread.sleep(500);
+        assertThat(jobStarted.waitForStarted(5, TimeUnit.SECONDS)).isTrue();
         assertThat(frontierInvocations).hasSize(1);
 
         assertThat(frontierInvocations.get(0).getJob().getId()).isEqualTo("job1");
@@ -353,6 +378,8 @@ public class ControllerServiceTest {
         Settings settings = new Settings();
         settings.setSkipAuthentication(true);
         inProcessServer = new ControllerApiServerMock(settings, null, inProcessServerBuilder, null).start();
+        JobExecutionStartedListener started = new JobExecutionStartedListener();
+        inProcessServer.addJobExecutionListener(started);
 
         // Test crawl all seeds for a job
         RunCrawlRequest request = RunCrawlRequest.newBuilder().setJobId("job1").build();
@@ -360,9 +387,10 @@ public class ControllerServiceTest {
         assertThat(reply.getJobExecutionId()).isEqualTo("job1Execution1");
 
         // Let async submission of Frontier requests get a little time to finish.
-        Thread.sleep(500);
+        assertThat(started.waitForStarted(5, TimeUnit.SECONDS)).isTrue();
         assertThat(frontierInvocations).hasSize(2);
 
+        Collections.sort(frontierInvocations, (o1, o2) -> o1.getSeed().getId().compareTo(o2.getSeed().getId()));
         assertThat(frontierInvocations.get(0).getJob().getId()).isEqualTo("job1");
         assertThat(frontierInvocations.get(0).getSeed().getId()).isEqualTo("seed1");
         assertThat(frontierInvocations.get(0).getTimeout()).isInstanceOf(Timestamp.class);
@@ -375,17 +403,49 @@ public class ControllerServiceTest {
     }
 
     @Test
+    void runCrawlWithTimeout() throws DbException, InterruptedException {
+        Settings settings = new Settings();
+        settings.setSkipAuthentication(true);
+        inProcessServer = new ControllerApiServerMock(settings, null, inProcessServerBuilder, null).start();
+        JobExecutionStartedListener started = new JobExecutionStartedListener();
+        inProcessServer.addJobExecutionListener(started);
+
+        // Test crawl all seeds for a job
+        RunCrawlRequest request = RunCrawlRequest.newBuilder().setJobId("job3").build();
+        RunCrawlReply reply = controllerClient.runCrawl(request);
+        assertThat(reply.getJobExecutionId()).isEqualTo("job3Execution1");
+
+        // Let async submission of Frontier requests get a little time to finish.
+        assertThat(started.waitForStarted(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(frontierInvocations).hasSize(1);
+
+        assertThat(frontierInvocations.get(0).getJob().getId()).isEqualTo("job3");
+        assertThat(frontierInvocations.get(0).getSeed().getId()).isEqualTo("seed1");
+        assertThat(frontierInvocations.get(0).hasTimeout()).isTrue();
+
+        verify(executionsAdapterMock, times(0)).createJobExecutionStatus("job1");
+        verify(executionsAdapterMock, times(0)).createJobExecutionStatus("job2");
+        verify(executionsAdapterMock, times(1)).createJobExecutionStatus("job3");
+    }
+
+    @Test
     void runCrawlSeedsMissing() throws DbException, InterruptedException {
         Settings settings = new Settings();
         settings.setSkipAuthentication(true);
         inProcessServer = new ControllerApiServerMock(settings, null, inProcessServerBuilder, null).start();
+        JobExecutionStartedListener jobStarted = new JobExecutionStartedListener();
+        inProcessServer.addJobExecutionListener(jobStarted);
 
         RunCrawlRequest request = RunCrawlRequest.newBuilder().setJobId("job2").build();
-        RunCrawlReply reply = controllerClient.runCrawl(request);
-        assertThat(reply.getJobExecutionId()).isEmpty();
+        assertThatThrownBy(() -> controllerClient.runCrawl(request))
+                .isInstanceOf(StatusRuntimeException.class)
+                .extracting(t -> ((StatusRuntimeException) t).getStatus().getCode())
+                .containsExactly(Status.FAILED_PRECONDITION.getCode());
 
         // Let async submission of Frontier requests get a little time to finish.
-        Thread.sleep(500);
+        // This should time out since no job is started when there are no seeds associated with job
+        assertThat(jobStarted.waitForStarted(500, TimeUnit.MILLISECONDS)).isFalse();
+
         assertThat(frontierInvocations).hasSize(0);
 
         verify(executionsAdapterMock, times(0)).createJobExecutionStatus("job1");

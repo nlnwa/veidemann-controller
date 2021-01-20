@@ -52,15 +52,12 @@ import no.nb.nna.veidemann.commons.db.DbService;
 import no.nb.nna.veidemann.commons.db.DbServiceSPI;
 import no.nb.nna.veidemann.commons.db.ExecutionsAdapter;
 import no.nb.nna.veidemann.commons.util.ApiTools;
-import no.nb.nna.veidemann.controller.ControllerApiServer.JobExecutionListener;
 import no.nb.nna.veidemann.controller.settings.Settings;
-import org.assertj.core.api.Assertions;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ForkJoinPool;
@@ -68,6 +65,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -150,17 +148,8 @@ public class ApiConcurrencyTest {
 
             when(executionsAdapterMock.getDesiredPausedState()).thenReturn(false);
 
-            CountDownLatch jobStarted = new CountDownLatch(1);
-            controller.addJobExecutionListener(new JobExecutionListener() {
-                @Override
-                public void onJobStarting(String jobExecutionId) {
-                }
-
-                @Override
-                public void onJobStarted(String jobExecutionId) {
-                    jobStarted.countDown();
-                }
-            });
+            JobExecutionStartedListener jobStarted = new JobExecutionStartedListener();
+            controller.addJobExecutionListener(jobStarted);
             controller.start();
             ControllerGrpc.ControllerFutureStub controllerClient = ControllerGrpc.newFutureStub(controllerChannel);
 
@@ -174,11 +163,11 @@ public class ApiConcurrencyTest {
             statusReply.addListener(() -> statusReplyTime.set(System.currentTimeMillis()), ForkJoinPool.commonPool());
 
             // Wait for job to be started
-            jobStarted.await();
+            assertThat(jobStarted.waitForStarted(5, TimeUnit.SECONDS)).isTrue();
             long time = System.currentTimeMillis();
 
             // Ensure that status request was handled while job was starting
-            Assertions.assertThat(statusReplyTime.get()).isLessThan(time).isNotCloseTo(time, Offset.offset(50L));
+            assertThat(statusReplyTime.get()).isLessThan(time).isNotCloseTo(time, Offset.offset(50L));
         }
     }
 
