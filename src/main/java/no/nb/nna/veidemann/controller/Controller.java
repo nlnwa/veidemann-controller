@@ -72,7 +72,8 @@ public class Controller {
                      .getFrontierPort(), "url");
              ScopeServiceClient scopeServiceClient = new ScopeServiceClient(SETTINGS.getScopeserviceHost(), SETTINGS
                      .getScopeservicePort());
-             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper, scopeServiceClient);
+             LogServiceClient logServiceClient = new LogServiceClient(SETTINGS.getLogServiceHost(), SETTINGS.getLogServicePort());
+             ControllerApiServer apiServer = new ControllerApiServer(SETTINGS, userRoleMapper, scopeServiceClient, logServiceClient);
              CrawlJobScheduler scheduler = new CrawlJobScheduler()) {
 
             registerShutdownHook();

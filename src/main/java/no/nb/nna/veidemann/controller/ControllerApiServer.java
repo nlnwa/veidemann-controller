@@ -58,6 +58,7 @@ public class ControllerApiServer implements AutoCloseable {
     final UserRoleMapper userRoleMapper;
     final Settings settings;
     final ScopeServiceClient scopeServiceClient;
+    final LogServiceClient logServiceClient;
 
     public interface JobExecutionListener {
         void onJobStarting(String jobExecutionId);
@@ -66,15 +67,17 @@ public class ControllerApiServer implements AutoCloseable {
 
     final List<JobExecutionListener> jobExecutionListeners = new ArrayList<>();
 
-    public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient) {
-        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper, scopeServiceClient);
+    public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient,
+                               LogServiceClient logServiceClient) {
+        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper, scopeServiceClient, logServiceClient);
     }
 
-    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient) {
+    public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient, LogServiceClient logServiceClient) {
         this.settings = settings;
         this.serverBuilder = serverBuilder;
         this.userRoleMapper = userRoleMapper;
         this.scopeServiceClient = scopeServiceClient;
+        this.logServiceClient = logServiceClient;
         threadPool = Executors.newCachedThreadPool();
         serverBuilder.executor(threadPool);
     }
@@ -123,6 +126,7 @@ public class ControllerApiServer implements AutoCloseable {
                 .addService(createService(new ControllerService(settings, jobExecutionListeners), interceptors))
                 .addService(createService(new ReportService(), interceptors))
                 .addService(createService(new EventService(), interceptors))
+                .addService(createService(new LogService(logServiceClient), interceptors))
                 .build();
 
         try {

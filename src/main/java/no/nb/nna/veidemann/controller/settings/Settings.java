@@ -32,6 +32,10 @@ public class Settings extends CommonSettings {
 
     private int scopeservicePort;
 
+    private String logServiceHost;
+
+    private int logServicePort;
+
     private String openIdConnectIssuer;
 
     private String apiKeyRoleMappingFile;
@@ -100,5 +104,21 @@ public class Settings extends CommonSettings {
 
     public void setSkipAuthentication(boolean skipAuthentication) {
         this.skipAuthentication = skipAuthentication;
+    }
+
+    public String getLogServiceHost() {
+        return logServiceHost;
+    }
+
+    public void setLogServiceHost(String logServiceHost) {
+        this.logServiceHost = logServiceHost;
+    }
+
+    public int getLogServicePort() {
+        return logServicePort;
+    }
+
+    public void setLogServicePort(int logServicePort) {
+        this.logServicePort = logServicePort;
     }
 }

@@ -95,7 +95,7 @@ public class ApiConcurrencyTest {
         settings.setSkipAuthentication(true);
 
         try (DbService db = DbService.configure(dbProviderMock);
-             ControllerApiServer controller = new ControllerApiServer(settings, controllerServerBuilder, null, null);
+             ControllerApiServer controller = new ControllerApiServer(settings, controllerServerBuilder, null, null, null);
              FrontierMock frontier = new FrontierMock(frontierServerBuilder);
              FrontierClient frontierClient = new FrontierClient(frontierChannel, "url")
         ) {

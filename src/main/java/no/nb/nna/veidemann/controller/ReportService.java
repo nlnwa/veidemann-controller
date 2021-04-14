@@ -25,17 +25,8 @@ import io.grpc.stub.ServerCallStreamObserver;
 import io.grpc.stub.StreamObserver;
 import no.nb.nna.veidemann.api.config.v1.Role;
 import no.nb.nna.veidemann.api.frontier.v1.CrawlExecutionStatus;
-import no.nb.nna.veidemann.api.frontier.v1.CrawlLog;
 import no.nb.nna.veidemann.api.frontier.v1.JobExecutionStatus;
-import no.nb.nna.veidemann.api.frontier.v1.PageLog;
-import no.nb.nna.veidemann.api.report.v1.CrawlExecutionsListRequest;
-import no.nb.nna.veidemann.api.report.v1.CrawlLogListRequest;
-import no.nb.nna.veidemann.api.report.v1.ExecuteDbQueryReply;
-import no.nb.nna.veidemann.api.report.v1.ExecuteDbQueryRequest;
-import no.nb.nna.veidemann.api.report.v1.JobExecutionsListRequest;
-import no.nb.nna.veidemann.api.report.v1.ListCountResponse;
-import no.nb.nna.veidemann.api.report.v1.PageLogListRequest;
-import no.nb.nna.veidemann.api.report.v1.ReportGrpc;
+import no.nb.nna.veidemann.api.report.v1.*;
 import no.nb.nna.veidemann.commons.auth.AllowedRoles;
 import no.nb.nna.veidemann.commons.db.ChangeFeed;
 import no.nb.nna.veidemann.commons.db.DbService;
@@ -47,8 +38,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.TimeoutException;
-
-import static no.nb.nna.veidemann.controller.JobExecutionUtil.handleGet;
 
 /**
  *
@@ -64,54 +53,6 @@ public class ReportService extends ReportGrpc.ReportImplBase {
         this.executionsAdapter = DbService.getInstance().getExecutionsAdapter();
         gson = new GsonBuilder()
                 .create();
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT})
-    public void listCrawlLogs(CrawlLogListRequest request, StreamObserver<CrawlLog> observer) {
-        StreamObserver<CrawlLog> responseObserver = new BlockingStreamObserver<>(observer);
-        new Thread(() -> {
-            try (ChangeFeed<CrawlLog> c = executionsAdapter.listCrawlLogs(request);) {
-                c.stream().forEach(o -> responseObserver.onNext(o));
-                responseObserver.onCompleted();
-            } catch (StatusRuntimeException e) {
-                LOG.error(e.getMessage(), e);
-                responseObserver.onError(e);
-            } catch (Exception ex) {
-                LOG.error(ex.getMessage(), ex);
-                Status status = Status.UNKNOWN.withDescription(ex.toString());
-                responseObserver.onError(status.asException());
-            }
-        }).start();
-    }
-
-    @Override
-    public void countCrawlLogs(CrawlLogListRequest request, StreamObserver<ListCountResponse> responseObserver) {
-        handleGet(() -> executionsAdapter.countCrawlLogs(request), responseObserver);
-    }
-
-    @Override
-    @AllowedRoles({Role.CURATOR, Role.OPERATOR, Role.ADMIN, Role.CONSULTANT})
-    public void listPageLogs(PageLogListRequest request, StreamObserver<PageLog> observer) {
-        StreamObserver<PageLog> responseObserver = new BlockingStreamObserver<>(observer);
-        new Thread(() -> {
-            try (ChangeFeed<PageLog> c = executionsAdapter.listPageLogs(request);) {
-                c.stream().forEach(o -> responseObserver.onNext(o));
-                responseObserver.onCompleted();
-            } catch (StatusRuntimeException e) {
-                LOG.error(e.getMessage(), e);
-                responseObserver.onError(e);
-            } catch (Exception ex) {
-                LOG.error(ex.getMessage(), ex);
-                Status status = Status.UNKNOWN.withDescription(ex.toString());
-                responseObserver.onError(status.asException());
-            }
-        }).start();
-    }
-
-    @Override
-    public void countPageLogs(PageLogListRequest request, StreamObserver<ListCountResponse> responseObserver) {
-        handleGet(() -> executionsAdapter.countPageLogs(request), responseObserver);
     }
 
     @Override
