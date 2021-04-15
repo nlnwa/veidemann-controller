@@ -42,10 +42,11 @@ public class LogServiceClient implements AutoCloseable {
     }
 
     public LogServiceClient(ManagedChannelBuilder<?> channelBuilder) {
+        LOG.info("Setting up log service client");
         channel = channelBuilder.build();
         blockingStub = LogGrpc.newBlockingStub(channel);
         asyncStub = LogGrpc.newStub(channel);
-        }
+    }
 
     public Iterator<CrawlLog> listCrawlLog(CrawlLogListRequest request) {
         return blockingStub.listCrawlLogs(request);
