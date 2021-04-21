@@ -55,7 +55,7 @@ public class ScopeServiceClient implements AutoCloseable {
     }
 
     public ScopeServiceClient(ManagedChannelBuilder<?> channelBuilder) {
-        LOG.info("Setting up Frontier client");
+        LOG.info("Setting up scope service client");
         ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor.Builder(GlobalTracer.get()).build();
         channel = channelBuilder.intercept(tracingInterceptor).build();
         blockingStub = UriCanonicalizerServiceGrpc.newBlockingStub(channel);
