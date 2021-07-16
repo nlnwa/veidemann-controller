@@ -28,8 +28,9 @@
         <docker.tag>${project.version}</docker.tag>
 
         <veidemann.api.version>1.0.0-beta23</veidemann.api.version>
-        <veidemann.commons.version>0.5.0</veidemann.commons.version>
-        <veidemann.rethinkdbadapter.version>0.7.0</veidemann.rethinkdbadapter.version>
+        <veidemann.commons.version>v0.6.0</veidemann.commons.version>
+        <veidemann.rethinkdbadapter.version>v0.9.0</veidemann.rethinkdbadapter.version>
+        <io.opentracing.version>0.33.0</io.opentracing.version>
 
         <com.github.netflix.concurrency-limits.version>0.3.7</com.github.netflix.concurrency-limits.version>
         <log4j.version>2.13.3</log4j.version>
@@ -85,6 +86,33 @@
             <groupId>com.github.netflix.concurrency-limits</groupId>
             <artifactId>concurrency-limits-grpc</artifactId>
             <version>${com.github.netflix.concurrency-limits.version}</version>
+        </dependency>
+
+        <!-- Tracing dependencies -->
+        <dependency>
+            <groupId>io.jaegertracing</groupId>
+            <artifactId>jaeger-client</artifactId>
+            <version>1.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing</groupId>
+            <artifactId>opentracing-api</artifactId>
+            <version>${io.opentracing.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing</groupId>
+            <artifactId>opentracing-util</artifactId>
+            <version>${io.opentracing.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing</groupId>
+            <artifactId>opentracing-noop</artifactId>
+            <version>${io.opentracing.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.opentracing.contrib</groupId>
+            <artifactId>opentracing-grpc</artifactId>
+            <version>0.2.3</version>
         </dependency>
 
         <!-- Configuration framework -->
@@ -169,11 +197,11 @@
         <plugins>
             <plugin>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.22.2</version>
+                <version>3.0.0-M5</version>
             </plugin>
             <plugin>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>2.22.2</version>
+                <version>3.0.0-M5</version>
             </plugin>
 
             <!-- Make version number available for application -->
@@ -192,7 +220,7 @@
             <plugin>
                 <groupId>com.google.cloud.tools</groupId>
                 <artifactId>jib-maven-plugin</artifactId>
-                <version>2.0.0</version>
+                <version>3.0.0</version>
                 <configuration>
                     <to>
                         <image>docker.io/norsknettarkiv/${project.artifactId}</image>

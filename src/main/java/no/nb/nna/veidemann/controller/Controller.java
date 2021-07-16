@@ -20,10 +20,12 @@ import com.typesafe.config.Config;
 import com.typesafe.config.ConfigBeanFactory;
 import com.typesafe.config.ConfigException;
 import com.typesafe.config.ConfigFactory;
+import io.jaegertracing.Configuration;
+import io.opentracing.Tracer;
+import io.opentracing.util.GlobalTracer;
 import no.nb.nna.veidemann.commons.auth.UserRoleMapper;
 import no.nb.nna.veidemann.commons.db.DbException;
 import no.nb.nna.veidemann.commons.db.DbService;
-import no.nb.nna.veidemann.commons.opentracing.TracerFactory;
 import no.nb.nna.veidemann.controller.scheduler.CrawlJobScheduler;
 import no.nb.nna.veidemann.controller.settings.Settings;
 import org.slf4j.Logger;
@@ -45,7 +47,8 @@ public class Controller {
         config.checkValid(ConfigFactory.defaultReference());
         SETTINGS = ConfigBeanFactory.create(config, Settings.class);
 
-        TracerFactory.init("Controller");
+        Tracer tracer = Configuration.fromEnv().getTracer();
+        GlobalTracer.registerIfAbsent(tracer);
     }
 
     public Controller() {

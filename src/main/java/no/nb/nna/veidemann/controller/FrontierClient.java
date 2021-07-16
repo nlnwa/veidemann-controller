@@ -26,7 +26,7 @@ import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
-import io.opentracing.contrib.ClientTracingInterceptor;
+import io.opentracing.contrib.grpc.TracingClientInterceptor;
 import io.opentracing.util.GlobalTracer;
 import no.nb.nna.veidemann.api.config.v1.ConfigObject;
 import no.nb.nna.veidemann.api.frontier.v1.CountResponse;
@@ -69,7 +69,8 @@ public class FrontierClient implements AutoCloseable {
 
     public FrontierClient(ManagedChannelBuilder<?> channelBuilder, String supportedSeedType) {
         LOG.info("Setting up Frontier client");
-        ClientInterceptor tracingInterceptor = new ClientTracingInterceptor.Builder(GlobalTracer.get()).build();
+
+        ClientInterceptor tracingInterceptor = TracingClientInterceptor.newBuilder().withTracer(GlobalTracer.get()).build();
         ClientInterceptor pressureLimitInterceptor = new ConcurrencyLimitClientInterceptor(
                 new GrpcClientLimiterBuilder()
                         .partitionByMethod()
