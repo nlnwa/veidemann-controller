@@ -18,9 +18,10 @@ package no.nb.nna.veidemann.controller;
 import com.google.common.util.concurrent.FutureCallback;
 import com.google.common.util.concurrent.Futures;
 import com.google.common.util.concurrent.ListenableFuture;
+import io.grpc.ClientInterceptor;
 import io.grpc.ManagedChannel;
 import io.grpc.ManagedChannelBuilder;
-import io.opentracing.contrib.ClientTracingInterceptor;
+import io.opentracing.contrib.grpc.TracingClientInterceptor;
 import io.opentracing.util.GlobalTracer;
 import no.nb.nna.veidemann.api.uricanonicalizer.v1.CanonicalizeRequest;
 import no.nb.nna.veidemann.api.uricanonicalizer.v1.CanonicalizeResponse;
@@ -56,7 +57,8 @@ public class ScopeServiceClient implements AutoCloseable {
 
     public ScopeServiceClient(ManagedChannelBuilder<?> channelBuilder) {
         LOG.info("Setting up scope service client");
-        ClientTracingInterceptor tracingInterceptor = new ClientTracingInterceptor.Builder(GlobalTracer.get()).build();
+        ClientInterceptor tracingInterceptor = TracingClientInterceptor.newBuilder()
+                .withTracer(GlobalTracer.get()).build();
         channel = channelBuilder.intercept(tracingInterceptor).build();
         blockingStub = UriCanonicalizerServiceGrpc.newBlockingStub(channel);
         asyncStub = UriCanonicalizerServiceGrpc.newStub(channel);

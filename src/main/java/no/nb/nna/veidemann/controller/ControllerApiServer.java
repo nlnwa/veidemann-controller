@@ -21,7 +21,8 @@ import io.grpc.ServerBuilder;
 import io.grpc.ServerInterceptor;
 import io.grpc.ServerInterceptors;
 import io.grpc.ServerServiceDefinition;
-import io.opentracing.contrib.ServerTracingInterceptor;
+import io.opentracing.contrib.grpc.TracingServerInterceptor;
+import io.opentracing.contrib.grpc.TracingServerInterceptor.ServerRequestAttribute;
 import io.opentracing.util.GlobalTracer;
 import no.nb.nna.veidemann.commons.auth.ApiKeyAuAuServerInterceptor;
 import no.nb.nna.veidemann.commons.auth.ApiKeyRoleMapper;
@@ -97,9 +98,10 @@ public class ControllerApiServer implements AutoCloseable {
     }
 
     public ControllerApiServer start() {
-        ServerTracingInterceptor tracingInterceptor = new ServerTracingInterceptor.Builder(GlobalTracer.get())
-                .withTracedAttributes(ServerTracingInterceptor.ServerRequestAttribute.CALL_ATTRIBUTES,
-                        ServerTracingInterceptor.ServerRequestAttribute.METHOD_TYPE)
+        TracingServerInterceptor tracingInterceptor = TracingServerInterceptor
+                .newBuilder()
+                .withTracer(GlobalTracer.get())
+                .withTracedAttributes(ServerRequestAttribute.CALL_ATTRIBUTES, ServerRequestAttribute.METHOD_TYPE)
                 .build();
 
         List<ServerInterceptor> interceptors = new ArrayList<>();

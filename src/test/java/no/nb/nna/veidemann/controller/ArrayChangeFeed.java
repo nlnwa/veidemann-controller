@@ -12,6 +12,7 @@ import java.util.stream.Stream;
 public class ArrayChangeFeed<T> implements ChangeFeed<T> {
     final T[] values;
 
+    @SafeVarargs
     public ArrayChangeFeed(T... values) {
         this.values = values;
     }

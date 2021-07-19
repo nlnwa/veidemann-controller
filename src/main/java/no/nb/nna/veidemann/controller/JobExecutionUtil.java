@@ -59,7 +59,7 @@ public class JobExecutionUtil {
     private final static ExecutorService exe = Executors.newFixedThreadPool(16);
     private final static ExecutorService submitSeedExecutor =
             new ThreadPoolExecutor(4, 16, 10L, TimeUnit.SECONDS,
-                    new LinkedBlockingQueue(5000), new CallerRunsPolicy());
+                    new LinkedBlockingQueue<>(5000), new CallerRunsPolicy());
 
     private JobExecutionUtil() {
     }
