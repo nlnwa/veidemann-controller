@@ -31,7 +31,7 @@ jobs:
         java-version: '11'
         distribution: 'adopt'
 
-    - name: Cache Maven packages
+    - name: Restore Maven cache
       uses: actions/cache@v2
       with:
         path: ~/.m2
@@ -39,7 +39,7 @@ jobs:
         restore-keys: ${{ runner.os }}-m2
 
     - name: Build and test with Maven
-      run: mvn --batch-mode --update-snapshots test
+      run: mvn --batch-mode test
 
     - name: Extract metadata (tags, labels) for Docker
       id: meta
@@ -51,7 +51,6 @@ jobs:
           type=ref,event=pr
           type=semver,pattern={{version}}
           type=semver,pattern={{major}}.{{minor}}
-        sep-tags: ","
         sep-labels: ","
 
     - name: Log in to the container registry
@@ -67,5 +66,5 @@ jobs:
       run: |
         mvn --batch-mode compile jib:build \
         -Djib.to.image="${REGISTRY}/${IMAGE_NAME}" \
-        -Djib.to.tags="${{ steps.meta.outputs.tags }}" \
+        -Djib.to.tags="${{ steps.meta.outputs.version }}" \
         -Djib.container.labels="${{ steps.meta.outputs.labels }}"
