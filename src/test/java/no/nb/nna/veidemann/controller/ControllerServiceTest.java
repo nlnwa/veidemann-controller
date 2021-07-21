@@ -416,7 +416,7 @@ public class ControllerServiceTest {
         assertThat(reply.getJobExecutionId()).isEqualTo("job3Execution1");
 
         // Let async submission of Frontier requests get a little time to finish.
-        assertThat(started.waitForStarted(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(started.waitForStarted(10, TimeUnit.SECONDS)).isTrue();
         assertThat(frontierInvocations).hasSize(1);
 
         assertThat(frontierInvocations.get(0).getJob().getId()).isEqualTo("job3");
