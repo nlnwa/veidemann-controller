@@ -221,6 +221,9 @@
                 <artifactId>jib-maven-plugin</artifactId>
                 <version>3.0.0</version>
                 <configuration>
+                    <from>
+                        <image>gcr.io/distroless/java:11</image>
+                    </from>
                     <to>
                         <image>ghcr.io/nlnwa/${project.artifactId}</image>
                     </to>
