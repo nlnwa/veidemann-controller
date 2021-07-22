@@ -52,7 +52,7 @@ public class ScheduledCrawlJob extends Task {
             JobExecutionStatus jobExecutionStatus = JobExecutionUtil.getRunningJobExecutionStatusForJob(job);
             if (jobExecutionStatus == null) {
                 LOG.debug("Job '{}' starting", job.getMeta().getName());
-                JobExecutionUtil.submitSeeds(job, jobExecutionStatus, calculateTimeout(job), false, Collections.EMPTY_LIST);
+                JobExecutionUtil.submitSeeds(job, null, calculateTimeout(job), false, Collections.emptyList());
             } else {
                 LOG.info("The job '{}' is already running. Job execution: '{}'", job.getMeta().getName(), jobExecutionStatus.getId());
             }
