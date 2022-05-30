@@ -118,7 +118,7 @@
         <dependency>
             <groupId>com.typesafe</groupId>
             <artifactId>config</artifactId>
-            <version>1.4.0</version>
+            <version>1.4.1</version>
         </dependency>
 
         <!-- Do all logging thru Log4j -->
@@ -200,7 +200,7 @@
             </plugin>
             <plugin>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>3.0.0-M5</version>
+                <version>3.0.0-M6</version>
             </plugin>
 
             <!-- Make version number available for application -->
@@ -219,7 +219,7 @@
             <plugin>
                 <groupId>com.google.cloud.tools</groupId>
                 <artifactId>jib-maven-plugin</artifactId>
-                <version>3.0.0</version>
+                <version>3.2.1</version>
                 <configuration>
                     <to>
                         <image>${project.artifactId}:${project.version}</image>
