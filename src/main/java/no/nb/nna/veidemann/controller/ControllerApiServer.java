@@ -15,12 +15,7 @@
  */
 package no.nb.nna.veidemann.controller;
 
-import io.grpc.BindableService;
-import io.grpc.Server;
-import io.grpc.ServerBuilder;
-import io.grpc.ServerInterceptor;
-import io.grpc.ServerInterceptors;
-import io.grpc.ServerServiceDefinition;
+import io.grpc.*;
 import io.opentracing.contrib.grpc.TracingServerInterceptor;
 import io.opentracing.contrib.grpc.TracingServerInterceptor.ServerRequestAttribute;
 import io.opentracing.util.GlobalTracer;
@@ -70,7 +65,7 @@ public class ControllerApiServer implements AutoCloseable {
 
     public ControllerApiServer(Settings settings, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient,
                                LogServiceClient logServiceClient) {
-        this(settings, ServerBuilder.forPort(settings.getApiPort()), userRoleMapper, scopeServiceClient, logServiceClient);
+        this(settings, Grpc.newServerBuilderForPort(settings.getApiPort(), InsecureServerCredentials.create()), userRoleMapper, scopeServiceClient, logServiceClient);
     }
 
     public ControllerApiServer(Settings settings, ServerBuilder<?> serverBuilder, UserRoleMapper userRoleMapper, ScopeServiceClient scopeServiceClient, LogServiceClient logServiceClient) {
@@ -81,6 +76,12 @@ public class ControllerApiServer implements AutoCloseable {
         this.logServiceClient = logServiceClient;
         threadPool = Executors.newCachedThreadPool();
         serverBuilder.executor(threadPool);
+        if (serverBuilder instanceof io.grpc.netty.NettyServerBuilder) {
+            serverBuilder.keepAliveTime(15, TimeUnit.SECONDS);
+            serverBuilder.keepAliveTimeout(10, TimeUnit.SECONDS);
+            serverBuilder.permitKeepAliveTime(5, TimeUnit.SECONDS);
+            serverBuilder.permitKeepAliveWithoutCalls(true);
+        }
     }
 
     /**
